@@ -2,17 +2,24 @@
 
 Unified MCP server for macOS Calendar, Reminders, and Notes. Provides 24 tools for interacting with native macOS apps.
 
+## Requirements
+
+- macOS 12.0+
+- Node.js 18+
+- Swift 5.9+ (included with Xcode)
+
 ## Installation
 
 ```bash
-cd /Users/jbkjr/code/macos-mcp
+git clone https://github.com/jbkjr/macos-mcp.git
+cd macos-mcp
 npm install
 npm run build:all  # Builds both TypeScript and Swift
 ```
 
 ## Usage
 
-Add to `~/.claude.json`:
+Add to your Claude Code configuration (`~/.claude.json`):
 
 ```json
 {
@@ -20,11 +27,13 @@ Add to `~/.claude.json`:
     "macos": {
       "type": "stdio",
       "command": "node",
-      "args": ["/Users/jbkjr/code/macos-mcp/build/index.js"]
+      "args": ["/path/to/macos-mcp/build/index.js"]
     }
   }
 }
 ```
+
+Replace `/path/to/macos-mcp` with the actual path where you cloned the repository.
 
 ## Tools
 
@@ -81,17 +90,10 @@ Add to `~/.claude.json`:
 ## Development
 
 ```bash
-# Run tests
-npm test
-
-# Watch mode
-npm run dev
-
-# Build TypeScript only
-npm run build
-
-# Build Swift only
-npm run build:swift
+npm test           # Run tests
+npm run dev        # Watch mode
+npm run build      # Build TypeScript only
+npm run build:swift  # Build Swift only
 ```
 
 ## Permissions
@@ -101,3 +103,7 @@ On first use, macOS will prompt for Calendar and Reminders access. Grant these i
 - System Settings > Privacy & Security > Reminders
 
 Notes access is granted via Automation permissions for `osascript`.
+
+## License
+
+MIT
