@@ -258,112 +258,75 @@ private func stringToFrequency(_ string: String) -> EKRecurrenceFrequency {
 }
 
 private func recurrenceRuleToJSON(_ rule: EKRecurrenceRule) -> RecurrenceRuleJSON {
-    let frequency = frequencyToString(rule.frequency)
-    let interval = rule.interval
-
-    // Convert daysOfTheWeek
-    let daysOfTheWeek: [DayOfWeekJSON]? = rule.daysOfTheWeek?.map { day in
+    let daysOfTheWeek = rule.daysOfTheWeek?.map { day in
         DayOfWeekJSON(dayOfWeek: day.dayOfTheWeek.rawValue, weekNumber: day.weekNumber == 0 ? nil : day.weekNumber)
     }
 
-    // Convert daysOfTheMonth (NSNumber array)
-    let daysOfTheMonth: [Int]? = rule.daysOfTheMonth?.map { $0.intValue }
-
-    // Convert monthsOfTheYear (NSNumber array)
-    let monthsOfTheYear: [Int]? = rule.monthsOfTheYear?.map { $0.intValue }
-
-    // Convert weeksOfTheYear (NSNumber array)
-    let weeksOfTheYear: [Int]? = rule.weeksOfTheYear?.map { $0.intValue }
-
-    // Convert daysOfTheYear (NSNumber array)
-    let daysOfTheYear: [Int]? = rule.daysOfTheYear?.map { $0.intValue }
-
-    // Convert setPositions (NSNumber array)
-    let setPositions: [Int]? = rule.setPositions?.map { $0.intValue }
-
-    // Convert recurrence end
-    var end: RecurrenceEndJSON? = nil
-    if let recurrenceEnd = rule.recurrenceEnd {
+    let end: RecurrenceEndJSON? = {
+        guard let recurrenceEnd = rule.recurrenceEnd else { return nil }
         if let endDate = recurrenceEnd.endDate {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
+            let formatter = formatterWithBaseLocale()
             formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
             formatter.timeZone = TimeZone.current
-            end = RecurrenceEndJSON(type: "date", date: formatter.string(from: endDate), count: nil)
-        } else if recurrenceEnd.occurrenceCount > 0 {
-            end = RecurrenceEndJSON(type: "count", date: nil, count: recurrenceEnd.occurrenceCount)
+            return RecurrenceEndJSON(type: "date", date: formatter.string(from: endDate), count: nil)
         }
-    }
+        if recurrenceEnd.occurrenceCount > 0 {
+            return RecurrenceEndJSON(type: "count", date: nil, count: recurrenceEnd.occurrenceCount)
+        }
+        return nil
+    }()
 
     return RecurrenceRuleJSON(
-        frequency: frequency,
-        interval: interval,
+        frequency: frequencyToString(rule.frequency),
+        interval: rule.interval,
         daysOfTheWeek: daysOfTheWeek,
-        daysOfTheMonth: daysOfTheMonth,
-        monthsOfTheYear: monthsOfTheYear,
-        weeksOfTheYear: weeksOfTheYear,
-        daysOfTheYear: daysOfTheYear,
-        setPositions: setPositions,
+        daysOfTheMonth: rule.daysOfTheMonth?.map { $0.intValue },
+        monthsOfTheYear: rule.monthsOfTheYear?.map { $0.intValue },
+        weeksOfTheYear: rule.weeksOfTheYear?.map { $0.intValue },
+        daysOfTheYear: rule.daysOfTheYear?.map { $0.intValue },
+        setPositions: rule.setPositions?.map { $0.intValue },
         end: end
     )
 }
 
 private func parseRecurrenceRule(from jsonString: String) -> EKRecurrenceRule? {
-    guard !jsonString.isEmpty else { return nil }
-
-    guard let data = jsonString.data(using: .utf8),
+    guard !jsonString.isEmpty,
+          let data = jsonString.data(using: .utf8),
           let json = try? JSONDecoder().decode(RecurrenceRuleJSON.self, from: data) else {
         return nil
     }
 
-    let frequency = stringToFrequency(json.frequency)
-    let interval = json.interval
-
-    // Convert daysOfTheWeek
-    var daysOfTheWeek: [EKRecurrenceDayOfWeek]? = nil
-    if let days = json.daysOfTheWeek {
-        daysOfTheWeek = days.compactMap { dayJSON in
-            guard let weekday = EKWeekday(rawValue: dayJSON.dayOfWeek) else { return nil }
-            if let weekNumber = dayJSON.weekNumber {
-                return EKRecurrenceDayOfWeek(weekday, weekNumber: weekNumber)
-            }
-            return EKRecurrenceDayOfWeek(weekday)
+    let daysOfTheWeek = json.daysOfTheWeek?.compactMap { dayJSON -> EKRecurrenceDayOfWeek? in
+        guard let weekday = EKWeekday(rawValue: dayJSON.dayOfWeek) else { return nil }
+        if let weekNumber = dayJSON.weekNumber {
+            return EKRecurrenceDayOfWeek(weekday, weekNumber: weekNumber)
         }
+        return EKRecurrenceDayOfWeek(weekday)
     }
 
-    // Convert arrays to NSNumber arrays
-    let daysOfTheMonth: [NSNumber]? = json.daysOfTheMonth?.map { NSNumber(value: $0) }
-    let monthsOfTheYear: [NSNumber]? = json.monthsOfTheYear?.map { NSNumber(value: $0) }
-    let weeksOfTheYear: [NSNumber]? = json.weeksOfTheYear?.map { NSNumber(value: $0) }
-    let daysOfTheYear: [NSNumber]? = json.daysOfTheYear?.map { NSNumber(value: $0) }
-    let setPositions: [NSNumber]? = json.setPositions?.map { NSNumber(value: $0) }
-
-    // Convert recurrence end
-    var recurrenceEnd: EKRecurrenceEnd? = nil
-    if let end = json.end {
+    let recurrenceEnd: EKRecurrenceEnd? = {
+        guard let end = json.end else { return nil }
         switch end.type {
         case "date":
-            if let dateStr = end.date, let date = parseDate(from: dateStr) {
-                recurrenceEnd = EKRecurrenceEnd(end: date)
-            }
+            guard let dateStr = end.date, let date = parseDate(from: dateStr) else { return nil }
+            return EKRecurrenceEnd(end: date)
         case "count":
-            if let count = end.count {
-                recurrenceEnd = EKRecurrenceEnd(occurrenceCount: count)
-            }
+            guard let count = end.count else { return nil }
+            return EKRecurrenceEnd(occurrenceCount: count)
         default:
-            break // "never" or unknown = no end
+            return nil
         }
-    }
+    }()
 
     return EKRecurrenceRule(
-        recurrenceWith: frequency,
-        interval: interval,
+        recurrenceWith: stringToFrequency(json.frequency),
+        interval: json.interval,
         daysOfTheWeek: daysOfTheWeek,
-        daysOfTheMonth: daysOfTheMonth,
-        monthsOfTheYear: monthsOfTheYear,
-        weeksOfTheYear: weeksOfTheYear,
-        daysOfTheYear: daysOfTheYear,
-        setPositions: setPositions,
+        daysOfTheMonth: json.daysOfTheMonth?.map { NSNumber(value: $0) },
+        monthsOfTheYear: json.monthsOfTheYear?.map { NSNumber(value: $0) },
+        weeksOfTheYear: json.weeksOfTheYear?.map { NSNumber(value: $0) },
+        daysOfTheYear: json.daysOfTheYear?.map { NSNumber(value: $0) },
+        setPositions: json.setPositions?.map { NSNumber(value: $0) },
         end: recurrenceEnd
     )
 }

@@ -117,13 +117,8 @@ export class RemindersService {
       dueDate: '--dueDate',
       completed: '--completed',
     });
-    // Handle recurrence: null = remove, object = set/update
     if (recurrence !== undefined) {
-      if (recurrence === null) {
-        args.push('--recurrence', '');
-      } else {
-        args.push('--recurrence', JSON.stringify(recurrence));
-      }
+      args.push('--recurrence', recurrence === null ? '' : JSON.stringify(recurrence));
     }
     return executeCli<Reminder>(args);
   }
