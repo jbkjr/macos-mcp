@@ -81,7 +81,7 @@ export function registerReminderTools(server: McpServer): void {
 
   server.tool(
     'create_reminder',
-    'Create a new reminder with optional recurrence (daily, weekly, monthly, yearly)',
+    'Create a new reminder',
     createReminderSchema.shape,
     wrapToolHandler(async (params) => service.createReminder(params))
   );
