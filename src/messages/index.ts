@@ -43,7 +43,7 @@ export function registerMessageTools(server: McpServer): void {
     'Get details of a specific chat/conversation by ID, including participants',
     getMessageChatSchema.shape,
     wrapToolHandler(async (params) => {
-      const chat = await service.getChat(params.id);
+      const chat = service.getChat(params.id);
       if (!chat) {
         throw new Error(`Chat with ID '${params.id}' not found`);
       }
@@ -65,7 +65,7 @@ export function registerMessageTools(server: McpServer): void {
     'Get a single iMessage/SMS message by ID',
     getMessageSchema.shape,
     wrapToolHandler(async (params) => {
-      const message = await service.getMessage(params.id);
+      const message = service.getMessage(params.id);
       if (!message) {
         throw new Error(`Message with ID '${params.id}' not found`);
       }
@@ -126,7 +126,7 @@ export function registerMessageTools(server: McpServer): void {
     'Get metadata for a specific message attachment by ID, including file path',
     getMessageAttachmentSchema.shape,
     wrapToolHandler(async (params) => {
-      const attachment = await service.getAttachment(params.id);
+      const attachment = service.getAttachment(params.id);
       if (!attachment) {
         throw new Error(`Attachment with ID '${params.id}' not found`);
       }

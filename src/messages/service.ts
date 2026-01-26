@@ -16,47 +16,33 @@ import type {
   SendMessageResult,
 } from './types.js';
 
-/**
- * Execute a query and handle errors with helpful messages
- */
+const FULL_DISK_ACCESS_ERROR =
+  'Cannot open Messages database. Full Disk Access is required.\n\n' +
+  'Please grant Full Disk Access in:\n' +
+  'System Settings > Privacy & Security > Full Disk Access';
+
+function wrapDatabaseError(error: unknown): never {
+  if (error instanceof Error && error.message.includes('SQLITE_CANTOPEN')) {
+    throw new Error(FULL_DISK_ACCESS_ERROR);
+  }
+  throw error;
+}
+
 function executeQuery<T>(query: string, params: unknown[] = []): T[] {
   try {
     const db = getDatabase();
-    const stmt = db.prepare(query);
-    return stmt.all(...params) as T[];
+    return db.prepare(query).all(...params) as T[];
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message.includes('SQLITE_CANTOPEN')) {
-        throw new Error(
-          'Cannot open Messages database. Full Disk Access is required.\n\n' +
-            'Please grant Full Disk Access in:\n' +
-            'System Settings > Privacy & Security > Full Disk Access'
-        );
-      }
-    }
-    throw error;
+    wrapDatabaseError(error);
   }
 }
 
-/**
- * Execute a single-row query
- */
 function executeQueryOne<T>(query: string, params: unknown[] = []): T | undefined {
   try {
     const db = getDatabase();
-    const stmt = db.prepare(query);
-    return stmt.get(...params) as T | undefined;
+    return db.prepare(query).get(...params) as T | undefined;
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message.includes('SQLITE_CANTOPEN')) {
-        throw new Error(
-          'Cannot open Messages database. Full Disk Access is required.\n\n' +
-            'Please grant Full Disk Access in:\n' +
-            'System Settings > Privacy & Security > Full Disk Access'
-        );
-      }
-    }
-    throw error;
+    wrapDatabaseError(error);
   }
 }
 
@@ -100,12 +86,9 @@ export class MessagesService {
   /**
    * List all chats/conversations
    */
-  async listChats(options?: {
-    limit?: number;
-  }): Promise<MessageChat[]> {
-    const limit = options?.limit || 50;
+  listChats(options?: { limit?: number }): MessageChat[] {
+    const limit = options?.limit ?? 50;
 
-    // Get chats with their most recent message info
     const query = `
       SELECT DISTINCT
         c.ROWID,
@@ -122,13 +105,12 @@ export class MessagesService {
     `;
 
     const rows = executeQuery<ChatRow>(query, [limit]);
-    const chats: MessageChat[] = [];
 
-    for (const row of rows) {
-      const participants = await this.getChatParticipants(row.ROWID);
-      const lastMessage = await this.getLastMessageForChat(row.ROWID);
+    return rows.map((row) => {
+      const participants = this.getChatParticipants(row.ROWID);
+      const lastMessage = this.getLastMessageForChat(row.ROWID);
 
-      chats.push({
+      return {
         id: String(row.ROWID),
         guid: row.guid,
         chatIdentifier: row.chat_identifier,
@@ -137,16 +119,14 @@ export class MessagesService {
         participants,
         lastMessageDate: lastMessage?.date,
         lastMessageText: lastMessage?.text,
-      });
-    }
-
-    return chats;
+      };
+    });
   }
 
   /**
    * Get a single chat by ID
    */
-  async getChat(id: string): Promise<MessageChat | undefined> {
+  getChat(id: string): MessageChat | undefined {
     const query = `
       SELECT ROWID, guid, chat_identifier, display_name, style
       FROM chat
@@ -158,8 +138,8 @@ export class MessagesService {
       return undefined;
     }
 
-    const participants = await this.getChatParticipants(row.ROWID);
-    const lastMessage = await this.getLastMessageForChat(row.ROWID);
+    const participants = this.getChatParticipants(row.ROWID);
+    const lastMessage = this.getLastMessageForChat(row.ROWID);
 
     return {
       id: String(row.ROWID),
@@ -176,14 +156,14 @@ export class MessagesService {
   /**
    * List messages with optional filters
    */
-  async listMessages(options?: {
+  listMessages(options?: {
     chatId?: string;
     limit?: number;
     beforeDate?: string;
     afterDate?: string;
     fromMe?: boolean;
-  }): Promise<Message[]> {
-    const limit = options?.limit || 50;
+  }): Message[] {
+    const limit = options?.limit ?? 50;
     const params: unknown[] = [];
     let whereClause = '1=1';
 
@@ -235,7 +215,7 @@ export class MessagesService {
   /**
    * Get a single message by ID
    */
-  async getMessage(id: string): Promise<Message | undefined> {
+  getMessage(id: string): Message | undefined {
     const query = `
       SELECT
         m.ROWID,
@@ -263,12 +243,12 @@ export class MessagesService {
   /**
    * Search messages by text content
    */
-  async searchMessages(options: {
+  searchMessages(options: {
     query: string;
     chatId?: string;
     limit?: number;
-  }): Promise<Message[]> {
-    const limit = options.limit || 50;
+  }): Message[] {
+    const limit = options.limit ?? 50;
     const searchPattern = `%${options.query}%`;
     const params: unknown[] = [searchPattern];
     let whereClause = 'm.text LIKE ?';
@@ -306,12 +286,12 @@ export class MessagesService {
   /**
    * List attachments with optional filters
    */
-  async listAttachments(options?: {
+  listAttachments(options?: {
     chatId?: string;
     messageId?: string;
     limit?: number;
-  }): Promise<MessageAttachment[]> {
-    const limit = options?.limit || 50;
+  }): MessageAttachment[] {
+    const limit = options?.limit ?? 50;
     const params: unknown[] = [];
     let whereClause = '1=1';
 
@@ -353,7 +333,7 @@ export class MessagesService {
   /**
    * Get a single attachment by ID
    */
-  async getAttachment(id: string): Promise<MessageAttachment | undefined> {
+  getAttachment(id: string): MessageAttachment | undefined {
     const query = `
       SELECT
         a.ROWID,
@@ -502,7 +482,7 @@ export class MessagesService {
 
   // ============ Private Helpers ============
 
-  private async getChatParticipants(chatRowId: number): Promise<MessageHandle[]> {
+  private getChatParticipants(chatRowId: number): MessageHandle[] {
     const query = `
       SELECT h.ROWID, h.id, h.service
       FROM handle h
@@ -519,7 +499,7 @@ export class MessagesService {
     }));
   }
 
-  private async getLastMessageForChat(chatRowId: number): Promise<{ date?: string; text?: string } | null> {
+  private getLastMessageForChat(chatRowId: number): { date?: string; text?: string } | null {
     const query = `
       SELECT m.date, m.text, m.attributedBody
       FROM message m

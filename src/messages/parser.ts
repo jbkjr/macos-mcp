@@ -120,7 +120,6 @@ function isPrintableText(str: string): boolean {
  */
 function extractPrintableRegions(blob: Buffer): string {
   const regions: string[] = [];
-  let currentRegion = '';
   let regionStart = -1;
 
   for (let i = 0; i < blob.length; i++) {
@@ -139,9 +138,9 @@ function extractPrintableRegions(blob: Buffer): string {
       }
     } else if (regionStart !== -1) {
       // End of printable region
-      currentRegion = blob.subarray(regionStart, i).toString('utf8');
-      if (currentRegion.length >= 2 && isPrintableText(currentRegion)) {
-        regions.push(currentRegion);
+      const region = blob.subarray(regionStart, i).toString('utf8');
+      if (region.length >= 2 && isPrintableText(region)) {
+        regions.push(region);
       }
       regionStart = -1;
     }
@@ -149,9 +148,9 @@ function extractPrintableRegions(blob: Buffer): string {
 
   // Handle final region
   if (regionStart !== -1) {
-    currentRegion = blob.subarray(regionStart).toString('utf8');
-    if (currentRegion.length >= 2 && isPrintableText(currentRegion)) {
-      regions.push(currentRegion);
+    const region = blob.subarray(regionStart).toString('utf8');
+    if (region.length >= 2 && isPrintableText(region)) {
+      regions.push(region);
     }
   }
 

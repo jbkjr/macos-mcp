@@ -86,18 +86,10 @@ export function getDatabase(): Database.Database {
 
 /**
  * Close the database connection
- * Call this during cleanup
  */
 export function closeDatabase(): void {
   if (dbInstance) {
     dbInstance.close();
     dbInstance = null;
   }
-}
-
-/**
- * Reset the database connection (useful after errors)
- */
-export function resetDatabase(): void {
-  closeDatabase();
 }

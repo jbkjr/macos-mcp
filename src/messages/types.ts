@@ -69,6 +69,6 @@ export interface SendMessageResult {
 }
 
 export interface DeleteResult {
+  id: string;
   deleted: boolean;
-  id?: string;
 }
