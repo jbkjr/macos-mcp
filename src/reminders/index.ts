@@ -81,14 +81,14 @@ export function registerReminderTools(server: McpServer): void {
 
   server.tool(
     'create_reminder',
-    'Create a new reminder',
+    'Create a new reminder with optional recurrence (daily, weekly, monthly, yearly)',
     createReminderSchema.shape,
     wrapToolHandler(async (params) => service.createReminder(params))
   );
 
   server.tool(
     'update_reminder',
-    'Update an existing reminder (title, notes, due date, completion status, etc.)',
+    'Update an existing reminder (title, notes, due date, completion status, recurrence). Set recurrence to null to remove.',
     updateReminderSchema.shape,
     wrapToolHandler(async (params) => {
       const { id, ...updates } = params;
