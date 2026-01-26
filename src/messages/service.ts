@@ -154,6 +154,34 @@ export class MessagesService {
   }
 
   /**
+   * Build chat filter clause from contact name or chat ID
+   * Returns null if contact was specified but not found or has no chats
+   */
+  private async buildChatFilter(options?: {
+    contact?: string;
+    chatId?: string;
+  }): Promise<{ clause: string; params: unknown[] } | null> {
+    if (options?.contact) {
+      const identifiers = await this.resolveContactToIdentifiers(options.contact);
+      if (identifiers.length === 0) {
+        return null;
+      }
+      const chatIds = this.getChatIdsByIdentifiers(identifiers);
+      if (chatIds.length === 0) {
+        return null;
+      }
+      const placeholders = chatIds.map(() => '?').join(', ');
+      return { clause: `cmj.chat_id IN (${placeholders})`, params: chatIds };
+    }
+
+    if (options?.chatId) {
+      return { clause: 'cmj.chat_id = ?', params: [parseInt(options.chatId, 10)] };
+    }
+
+    return { clause: '', params: [] };
+  }
+
+  /**
    * List messages with optional filters
    */
   async listMessages(options?: {
@@ -166,42 +194,34 @@ export class MessagesService {
   }): Promise<Message[]> {
     const limit = options?.limit ?? 50;
     const params: unknown[] = [];
-    let whereClause = '1=1';
+    const conditions: string[] = [];
 
-    // Resolve contact to chat IDs if provided
-    if (options?.contact) {
-      const identifiers = await this.resolveContactToIdentifiers(options.contact);
-      if (identifiers.length === 0) {
-        return []; // No matching contact found
-      }
-      const chatIds = this.getChatIdsByIdentifiers(identifiers);
-      if (chatIds.length === 0) {
-        return []; // Contact found but no chats with them
-      }
-      const placeholders = chatIds.map(() => '?').join(', ');
-      whereClause += ` AND cmj.chat_id IN (${placeholders})`;
-      params.push(...chatIds);
-    } else if (options?.chatId) {
-      whereClause += ' AND cmj.chat_id = ?';
-      params.push(parseInt(options.chatId, 10));
+    const chatFilter = await this.buildChatFilter(options);
+    if (chatFilter === null) {
+      return [];
+    }
+    if (chatFilter.clause) {
+      conditions.push(chatFilter.clause);
+      params.push(...chatFilter.params);
     }
 
     if (options?.beforeDate) {
-      whereClause += ' AND m.date < ?';
+      conditions.push('m.date < ?');
       params.push(isoToMacosTimestamp(options.beforeDate));
     }
 
     if (options?.afterDate) {
-      whereClause += ' AND m.date > ?';
+      conditions.push('m.date > ?');
       params.push(isoToMacosTimestamp(options.afterDate));
     }
 
     if (options?.fromMe !== undefined) {
-      whereClause += ' AND m.is_from_me = ?';
+      conditions.push('m.is_from_me = ?');
       params.push(options.fromMe ? 1 : 0);
     }
 
     params.push(limit);
+    const whereClause = conditions.length > 0 ? conditions.join(' AND ') : '1=1';
 
     const query = `
       SELECT
@@ -266,24 +286,15 @@ export class MessagesService {
     const limit = options.limit ?? 50;
     const searchPattern = `%${options.query}%`;
     const params: unknown[] = [searchPattern];
-    let whereClause = 'm.text LIKE ?';
+    const conditions: string[] = ['m.text LIKE ?'];
 
-    // Resolve contact to chat IDs if provided
-    if (options.contact) {
-      const identifiers = await this.resolveContactToIdentifiers(options.contact);
-      if (identifiers.length === 0) {
-        return []; // No matching contact found
-      }
-      const chatIds = this.getChatIdsByIdentifiers(identifiers);
-      if (chatIds.length === 0) {
-        return []; // Contact found but no chats with them
-      }
-      const placeholders = chatIds.map(() => '?').join(', ');
-      whereClause += ` AND cmj.chat_id IN (${placeholders})`;
-      params.push(...chatIds);
-    } else if (options.chatId) {
-      whereClause += ' AND cmj.chat_id = ?';
-      params.push(parseInt(options.chatId, 10));
+    const chatFilter = await this.buildChatFilter(options);
+    if (chatFilter === null) {
+      return [];
+    }
+    if (chatFilter.clause) {
+      conditions.push(chatFilter.clause);
+      params.push(...chatFilter.params);
     }
 
     params.push(limit);
@@ -301,7 +312,7 @@ export class MessagesService {
         cmj.chat_id
       FROM message m
       LEFT JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
-      WHERE ${whereClause}
+      WHERE ${conditions.join(' AND ')}
       ORDER BY m.date DESC
       LIMIT ?
     `;

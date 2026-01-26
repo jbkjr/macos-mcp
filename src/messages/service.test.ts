@@ -71,7 +71,7 @@ describe('MessagesService', () => {
   });
 
   describe('listChats', () => {
-    it('should return list of chats', async () => {
+    it('should return list of chats', () => {
       const mockChats = [
         { ROWID: 1, guid: 'chat-1', chat_identifier: '+1234567890', display_name: null, style: 45 },
         { ROWID: 2, guid: 'chat-2', chat_identifier: 'chat123', display_name: 'Family', style: 43 },
@@ -82,7 +82,7 @@ describe('MessagesService', () => {
       // Mock last message query
       mockStmt.get.mockReturnValue(null);
 
-      const result = await service.listChats();
+      const result = service.listChats();
 
       expect(getDatabaseMock).toHaveBeenCalled();
       expect(result).toHaveLength(2);
@@ -92,10 +92,10 @@ describe('MessagesService', () => {
       expect(result[1].displayName).toBe('Family');
     });
 
-    it('should respect limit parameter', async () => {
+    it('should respect limit parameter', () => {
       mockStmt.all.mockReturnValueOnce([]);
 
-      await service.listChats({ limit: 10 });
+      service.listChats({ limit: 10 });
 
       expect(mockDb.prepare).toHaveBeenCalled();
       const query = mockDb.prepare.mock.calls[0][0];
@@ -104,7 +104,7 @@ describe('MessagesService', () => {
   });
 
   describe('getChat', () => {
-    it('should return single chat by ID', async () => {
+    it('should return single chat by ID', () => {
       const mockChat = { ROWID: 1, guid: 'chat-1', chat_identifier: '+1234567890', display_name: null, style: 45 };
       mockStmt.get.mockReturnValueOnce(mockChat);
       // Mock participants
@@ -112,17 +112,17 @@ describe('MessagesService', () => {
       // Mock last message
       mockStmt.get.mockReturnValueOnce({ date: 1700000000000000000, text: 'Hello', attributedBody: null });
 
-      const result = await service.getChat('1');
+      const result = service.getChat('1');
 
       expect(result).toBeDefined();
       expect(result?.id).toBe('1');
       expect(result?.participants).toHaveLength(1);
     });
 
-    it('should return undefined for non-existent chat', async () => {
+    it('should return undefined for non-existent chat', () => {
       mockStmt.get.mockReturnValueOnce(undefined);
 
-      const result = await service.getChat('999');
+      const result = service.getChat('999');
 
       expect(result).toBeUndefined();
     });
@@ -208,20 +208,20 @@ describe('MessagesService', () => {
   });
 
   describe('getMessage', () => {
-    it('should return single message by ID', async () => {
+    it('should return single message by ID', () => {
       const mockMessage = { ROWID: 1, guid: 'msg-1', text: 'Hello', attributedBody: null, date: 1700000000000000000, is_from_me: 1, handle_id: 0, cache_has_attachments: 0, chat_id: 1 };
       mockStmt.get.mockReturnValueOnce(mockMessage);
 
-      const result = await service.getMessage('1');
+      const result = service.getMessage('1');
 
       expect(result).toBeDefined();
       expect(result?.text).toBe('Hello');
     });
 
-    it('should return undefined for non-existent message', async () => {
+    it('should return undefined for non-existent message', () => {
       mockStmt.get.mockReturnValueOnce(undefined);
 
-      const result = await service.getMessage('999');
+      const result = service.getMessage('999');
 
       expect(result).toBeUndefined();
     });
@@ -286,13 +286,13 @@ describe('MessagesService', () => {
   });
 
   describe('listAttachments', () => {
-    it('should return list of attachments', async () => {
+    it('should return list of attachments', () => {
       const mockAttachments = [
         { ROWID: 1, guid: 'att-1', filename: '/path/to/file.jpg', mime_type: 'image/jpeg', transfer_name: 'file.jpg', total_bytes: 1024, message_id: 1 },
       ];
       mockStmt.all.mockReturnValueOnce(mockAttachments);
 
-      const result = await service.listAttachments();
+      const result = service.listAttachments();
 
       expect(result).toHaveLength(1);
       expect(result[0].filename).toBe('/path/to/file.jpg');
@@ -300,11 +300,11 @@ describe('MessagesService', () => {
   });
 
   describe('getAttachment', () => {
-    it('should return single attachment by ID', async () => {
+    it('should return single attachment by ID', () => {
       const mockAttachment = { ROWID: 1, guid: 'att-1', filename: '/path/to/file.jpg', mime_type: 'image/jpeg', transfer_name: 'file.jpg', total_bytes: 1024, message_id: 1 };
       mockStmt.get.mockReturnValueOnce(mockAttachment);
 
-      const result = await service.getAttachment('1');
+      const result = service.getAttachment('1');
 
       expect(result).toBeDefined();
       expect(result?.mimeType).toBe('image/jpeg');

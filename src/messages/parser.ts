@@ -49,6 +49,38 @@ export function decodeTypedstreamLength(
 }
 
 /**
+ * Try to extract text following a marker in the blob
+ * Returns the extracted text or null if extraction fails
+ */
+function extractTextAfterMarker(blob: Buffer, marker: Buffer): string | null {
+  const markerIndex = blob.indexOf(marker);
+  if (markerIndex === -1) {
+    return null;
+  }
+
+  let pos = markerIndex + marker.length;
+
+  // Skip any null bytes or metadata between marker and content
+  while (pos < blob.length && (blob[pos] === 0 || blob[pos] < 32)) {
+    pos++;
+  }
+
+  if (pos >= blob.length) {
+    return null;
+  }
+
+  const { length: possibleLength, bytesConsumed } = decodeTypedstreamLength(blob, pos);
+
+  // Validate the length is reasonable
+  if (possibleLength <= 0 || possibleLength >= 100000 || pos + bytesConsumed + possibleLength > blob.length) {
+    return null;
+  }
+
+  const extracted = blob.subarray(pos + bytesConsumed, pos + bytesConsumed + possibleLength).toString('utf8');
+  return isPrintableText(extracted) ? extracted : null;
+}
+
+/**
  * Extract text from attributedBody blob
  *
  * macOS Ventura+ stores message text in the attributedBody column as a binary
@@ -65,67 +97,18 @@ export function parseAttributedBody(blob: Buffer | null): string {
 
   try {
     // Strategy 1: Look for NSString marker followed by length-prefixed string
-    // The typedstream format often has: ...NSString<length_byte><string_data>...
-    const nsStringMarker = Buffer.from('NSString');
-    let markerIndex = blob.indexOf(nsStringMarker);
-
-    if (markerIndex !== -1) {
-      // Skip past the marker and look for the string
-      let pos = markerIndex + nsStringMarker.length;
-
-      // Skip any null bytes or metadata between marker and content
-      while (pos < blob.length && (blob[pos] === 0 || blob[pos] < 32)) {
-        pos++;
-      }
-
-      // Check for a length byte (or multi-byte length)
-      if (pos < blob.length) {
-        const { length: possibleLength, bytesConsumed } = decodeTypedstreamLength(blob, pos);
-
-        // If it looks like a reasonable string length
-        if (possibleLength > 0 && possibleLength < 100000 && pos + bytesConsumed + possibleLength <= blob.length) {
-          const extracted = blob.subarray(pos + bytesConsumed, pos + bytesConsumed + possibleLength).toString('utf8');
-          // Verify it looks like text (printable characters)
-          if (isPrintableText(extracted)) {
-            return extracted;
-          }
-        }
-      }
+    const nsStringResult = extractTextAfterMarker(blob, Buffer.from('NSString'));
+    if (nsStringResult) {
+      return nsStringResult;
     }
 
-    // Strategy 2: Look for "NSMutableString" marker
-    const nsMutableMarker = Buffer.from('NSMutableString');
-    markerIndex = blob.indexOf(nsMutableMarker);
-
-    if (markerIndex !== -1) {
-      let pos = markerIndex + nsMutableMarker.length;
-      while (pos < blob.length && (blob[pos] === 0 || blob[pos] < 32)) {
-        pos++;
-      }
-
-      if (pos < blob.length) {
-        const { length: possibleLength, bytesConsumed } = decodeTypedstreamLength(blob, pos);
-        if (possibleLength > 0 && possibleLength < 100000 && pos + bytesConsumed + possibleLength <= blob.length) {
-          const extracted = blob.subarray(pos + bytesConsumed, pos + bytesConsumed + possibleLength).toString('utf8');
-          if (isPrintableText(extracted)) {
-            return extracted;
-          }
-        }
-      }
+    // Strategy 2: Look for NSMutableString marker
+    const nsMutableResult = extractTextAfterMarker(blob, Buffer.from('NSMutableString'));
+    if (nsMutableResult) {
+      return nsMutableResult;
     }
 
-    // Strategy 3: Look for streamtyped header and extract text after it
-    // The streamtyped format has a header followed by the actual content
-    const streamHeader = Buffer.from('streamtyped');
-    if (blob.indexOf(streamHeader) !== -1) {
-      // Try to find printable text regions in the blob
-      const text = extractPrintableRegions(blob);
-      if (text.length > 0) {
-        return text;
-      }
-    }
-
-    // Strategy 4: Fallback - try to extract any reasonable text
+    // Strategy 3: Fallback - try to extract printable text regions
     const fallbackText = extractPrintableRegions(blob);
     if (fallbackText.length > 0) {
       return fallbackText;
@@ -133,7 +116,6 @@ export function parseAttributedBody(blob: Buffer | null): string {
 
     return '';
   } catch {
-    // If parsing fails, return empty string
     return '';
   }
 }
