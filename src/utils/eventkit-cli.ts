@@ -29,7 +29,7 @@ type CliResponse<T> = CliSuccessResponse<T> | CliErrorResponse;
 /**
  * Permission domains for macOS
  */
-export type PermissionDomain = 'calendars' | 'reminders';
+export type PermissionDomain = 'calendars' | 'reminders' | 'contacts';
 
 /**
  * Custom error for permission issues
@@ -104,6 +104,8 @@ const CALENDAR_ACTIONS = new Set([
   'delete-event',
 ]);
 
+const CONTACT_ACTIONS = new Set(['resolve-contact']);
+
 const extractAction = (args: string[]): string | undefined => {
   const actionIndex = args.indexOf('--action');
   if (actionIndex >= 0 && actionIndex + 1 < args.length) {
@@ -116,6 +118,9 @@ const inferDomainFromArgs = (args: string[]): PermissionDomain => {
   const action = extractAction(args);
   if (action && CALENDAR_ACTIONS.has(action)) {
     return 'calendars';
+  }
+  if (action && CONTACT_ACTIONS.has(action)) {
+    return 'contacts';
   }
   return 'reminders';
 };
@@ -133,6 +138,7 @@ const detectPermissionDomain = (
   }
   if (lower.includes('reminder')) return 'reminders';
   if (lower.includes('calendar')) return 'calendars';
+  if (lower.includes('contact')) return 'contacts';
   return inferDomainFromArgs(args);
 };
 

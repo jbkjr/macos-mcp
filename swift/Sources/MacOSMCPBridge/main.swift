@@ -1,6 +1,7 @@
 import Foundation
 import Dispatch
 import EventKit
+import Contacts
 
 // MARK: - Output Structures & JSON Models
 struct StandardOutput<T: Codable>: Codable { let status = "success"; let result: T }
@@ -42,6 +43,19 @@ struct RecurrenceRuleJSON: Codable {
 struct ReminderJSON: Codable { let id: String, title: String, isCompleted: Bool, list: String, notes: String?, url: String?, dueDate: String?, recurrence: RecurrenceRuleJSON?, priority: String? }
 struct ReadResult: Codable { let lists: [ListJSON]; let reminders: [ReminderJSON] }
 struct DeleteListResult: Codable { let title: String; let deleted = true }
+
+// Contact Models
+struct ContactPhoneJSON: Codable { let label: String?; let number: String }
+struct ContactEmailJSON: Codable { let label: String?; let email: String }
+struct ContactJSON: Codable {
+    let id: String
+    let fullName: String
+    let givenName: String?
+    let familyName: String?
+    let phoneNumbers: [ContactPhoneJSON]
+    let emailAddresses: [ContactEmailJSON]
+}
+struct ContactSearchResult: Codable { let contacts: [ContactJSON] }
 
 // MARK: - Date Parsing Helper
 private struct ExplicitTimezone {
@@ -689,6 +703,78 @@ class EventKitManager {
     }
 }
 
+// MARK: - ContactsManager Class
+class ContactsManager {
+    private let contactStore = CNContactStore()
+
+    func checkAuthorizationStatus() -> CNAuthorizationStatus {
+        return CNContactStore.authorizationStatus(for: .contacts)
+    }
+
+    func requestAccess(completion: @escaping (Bool, Error?) -> Void) {
+        contactStore.requestAccess(for: .contacts, completionHandler: completion)
+    }
+
+    func searchContacts(name: String?, phone: String?, email: String?) throws -> [ContactJSON] {
+        let keysToFetch: [CNKeyDescriptor] = [
+            CNContactIdentifierKey as CNKeyDescriptor,
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactEmailAddressesKey as CNKeyDescriptor,
+            CNContactFormatter.descriptorForRequiredKeys(for: .fullName)
+        ]
+
+        var contacts: [CNContact] = []
+
+        if let searchName = name, !searchName.isEmpty {
+            // Search by name
+            let predicate = CNContact.predicateForContacts(matchingName: searchName)
+            contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: keysToFetch)
+        } else if let searchPhone = phone, !searchPhone.isEmpty {
+            // Search by phone number
+            let normalizedPhone = normalizePhoneNumber(searchPhone)
+            let predicate = CNContact.predicateForContacts(matching: CNPhoneNumber(stringValue: normalizedPhone))
+            contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: keysToFetch)
+        } else if let searchEmail = email, !searchEmail.isEmpty {
+            // Search by email
+            let predicate = CNContact.predicateForContacts(matchingEmailAddress: searchEmail)
+            contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: keysToFetch)
+        } else {
+            throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Must provide --name, --phone, or --email to search contacts."])
+        }
+
+        return contacts.map { contact in
+            let fullName = CNContactFormatter.string(from: contact, style: .fullName) ?? ""
+            let phones = contact.phoneNumbers.map { phone in
+                ContactPhoneJSON(
+                    label: CNLabeledValue<CNPhoneNumber>.localizedString(forLabel: phone.label ?? ""),
+                    number: phone.value.stringValue
+                )
+            }
+            let emails = contact.emailAddresses.map { email in
+                ContactEmailJSON(
+                    label: CNLabeledValue<NSString>.localizedString(forLabel: email.label ?? ""),
+                    email: email.value as String
+                )
+            }
+            return ContactJSON(
+                id: contact.identifier,
+                fullName: fullName,
+                givenName: contact.givenName.isEmpty ? nil : contact.givenName,
+                familyName: contact.familyName.isEmpty ? nil : contact.familyName,
+                phoneNumbers: phones,
+                emailAddresses: emails
+            )
+        }
+    }
+
+    private func normalizePhoneNumber(_ phone: String) -> String {
+        // Remove common formatting characters, keep + for international
+        return phone.filter { $0.isNumber || $0 == "+" }
+    }
+}
+
 // MARK: - Extensions
 extension EKReminder {
     func toJSON() -> ReminderJSON {
@@ -758,6 +844,7 @@ struct ArgumentParser {
 enum PermissionDomain: String {
     case calendars = "Calendars"
     case reminders = "Reminders"
+    case contacts = "Contacts"
 
     var settingsPath: String { "System Settings > Privacy & Security > \(rawValue)" }
 }
@@ -785,6 +872,32 @@ func handlePermission(
         _ = onError("\(domain.rawValue) permission denied or restricted.\n\nPlease grant \(domain.rawValue.lowercased()) permissions in:\n\(domain.settingsPath)")
     case .writeOnly:
         _ = onError("\(domain.rawValue) permission is write-only, but read access is required.\n\nPlease grant full \(domain.rawValue.lowercased()) permissions in:\n\(domain.settingsPath)")
+    @unknown default:
+        _ = onError("Unknown \(domain.rawValue.lowercased()) permission status.")
+    }
+}
+
+func handleContactsPermission(
+    status: CNAuthorizationStatus,
+    domain: PermissionDomain,
+    requestAccess: (@escaping (Bool, Error?) -> Void) -> Void,
+    onGranted: @escaping () -> Void,
+    onError: @escaping (String) -> Never
+) {
+    switch status {
+    case .authorized:
+        onGranted()
+    case .notDetermined:
+        requestAccess { granted, error in
+            guard granted else {
+                let errorMsg = error?.localizedDescription ?? "Unknown error"
+                _ = onError("\(domain.rawValue) permission denied. \(errorMsg)\n\nPlease grant \(domain.rawValue.lowercased()) permissions in:\n\(domain.settingsPath)")
+                return
+            }
+            onGranted()
+        }
+    case .denied, .restricted:
+        _ = onError("\(domain.rawValue) permission denied or restricted.\n\nPlease grant \(domain.rawValue.lowercased()) permissions in:\n\(domain.settingsPath)")
     @unknown default:
         _ = onError("Unknown \(domain.rawValue.lowercased()) permission status.")
     }
@@ -819,9 +932,13 @@ func main() {
     let action = parser.get("action") ?? ""
     let calendarActions = Set(["read-calendars", "read-events", "get-event", "create-event", "update-event", "delete-event"])
     let reminderActions = Set(["read-lists", "read-reminders", "get-reminder", "create-reminder", "update-reminder", "delete-reminder", "create-list", "update-list", "delete-list"])
+    let contactActions = Set(["resolve-contact"])
 
     let isCalendarAction = calendarActions.contains(action)
     let isReminderAction = reminderActions.contains(action)
+    let isContactAction = contactActions.contains(action)
+
+    let contactsManager = ContactsManager()
 
     func handleAction() {
         do {
@@ -925,8 +1042,17 @@ func main() {
                 try manager.deleteList(title: name)
                 try outputResult(DeleteListResult(title: name))
 
+            // Contact actions
+            case "resolve-contact":
+                let contacts = try contactsManager.searchContacts(
+                    name: parser.get("name"),
+                    phone: parser.get("phone"),
+                    email: parser.get("email")
+                )
+                try outputResult(ContactSearchResult(contacts: contacts))
+
             default:
-                throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid or missing --action. Valid actions: read-calendars, read-events, get-event, create-event, update-event, delete-event, read-lists, read-reminders, get-reminder, create-reminder, update-reminder, delete-reminder, create-list, update-list, delete-list"])
+                throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid or missing --action. Valid actions: read-calendars, read-events, get-event, create-event, update-event, delete-event, read-lists, read-reminders, get-reminder, create-reminder, update-reminder, delete-reminder, create-list, update-list, delete-list, resolve-contact"])
             }
         } catch {
             outputError(error.localizedDescription)
@@ -948,6 +1074,14 @@ func main() {
             status: manager.checkRemindersAuthorizationStatus(),
             domain: .reminders,
             requestAccess: manager.requestRemindersAccess,
+            onGranted: handleAction,
+            onError: outputError
+        )
+    } else if isContactAction {
+        handleContactsPermission(
+            status: contactsManager.checkAuthorizationStatus(),
+            domain: .contacts,
+            requestAccess: contactsManager.requestAccess,
             onGranted: handleAction,
             onError: outputError
         )

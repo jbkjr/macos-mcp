@@ -10,18 +10,20 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { registerCalendarTools } from './calendar/index.js';
 import { registerReminderTools } from './reminders/index.js';
 import { registerNoteTools } from './notes/index.js';
+import { registerMessageTools } from './messages/index.js';
 
 // Create MCP server
 const server = new McpServer({
   name: 'macos-mcp',
   version: '1.0.0',
-  description: 'Unified MCP server for macOS Calendar, Reminders, and Notes',
+  description: 'Unified MCP server for macOS Calendar, Reminders, Notes, and Messages',
 });
 
 // Register all tools
 registerCalendarTools(server);
 registerReminderTools(server);
 registerNoteTools(server);
+registerMessageTools(server);
 
 // Start the server
 async function main() {
