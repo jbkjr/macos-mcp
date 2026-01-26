@@ -54,7 +54,8 @@ export function registerMessageTools(server: McpServer): void {
   // Message tools
   server.tool(
     'list_messages',
-    'List iMessage/SMS messages with optional filters (chat, date range, sender). ' +
+    'List iMessage/SMS messages with optional filters (chat, contact name, date range, sender). ' +
+      'Use "contact" to filter by name (automatically resolves to chat IDs). ' +
       'Returns most recent messages first.',
     listMessagesSchema.shape,
     wrapToolHandler(async (params) => service.listMessages(params))
@@ -76,6 +77,7 @@ export function registerMessageTools(server: McpServer): void {
   server.tool(
     'search_messages',
     'Search iMessage/SMS messages by text content. ' +
+      'Use "contact" to filter by name (automatically resolves to chat IDs). ' +
       'Note: Only searches locally-cached messages.',
     searchMessagesSchema.shape,
     wrapToolHandler(async (params) => service.searchMessages(params))

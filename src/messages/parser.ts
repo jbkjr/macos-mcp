@@ -7,6 +7,48 @@
  */
 
 /**
+ * Decode a typedstream variable-length integer
+ *
+ * Apple's typedstream format uses variable-length encoding for string lengths:
+ * - < 0x80: Single byte length
+ * - 0x81: Following 2 bytes = u16 (little-endian)
+ * - 0x82: Following 4 bytes = u32 (little-endian)
+ *
+ * @param blob - The buffer to read from
+ * @param pos - Position in the buffer
+ * @returns Object with decoded length and bytes consumed
+ */
+export function decodeTypedstreamLength(
+  blob: Buffer,
+  pos: number
+): { length: number; bytesConsumed: number } {
+  if (pos >= blob.length) return { length: 0, bytesConsumed: 0 };
+
+  const firstByte = blob[pos];
+
+  if (firstByte < 0x80) {
+    return { length: firstByte, bytesConsumed: 1 };
+  }
+
+  switch (firstByte) {
+    case 0x81: {
+      // u16 little-endian
+      if (pos + 2 >= blob.length) return { length: 0, bytesConsumed: 1 };
+      const length = blob[pos + 1] | (blob[pos + 2] << 8);
+      return { length, bytesConsumed: 3 };
+    }
+    case 0x82: {
+      // u32 little-endian
+      if (pos + 4 >= blob.length) return { length: 0, bytesConsumed: 1 };
+      return { length: blob.readUInt32LE(pos + 1), bytesConsumed: 5 };
+    }
+    default:
+      // Treat unknown markers as single-byte length
+      return { length: firstByte, bytesConsumed: 1 };
+  }
+}
+
+/**
  * Extract text from attributedBody blob
  *
  * macOS Ventura+ stores message text in the attributedBody column as a binary
@@ -36,13 +78,13 @@ export function parseAttributedBody(blob: Buffer | null): string {
         pos++;
       }
 
-      // Check for a length byte (common pattern)
+      // Check for a length byte (or multi-byte length)
       if (pos < blob.length) {
-        const possibleLength = blob[pos];
+        const { length: possibleLength, bytesConsumed } = decodeTypedstreamLength(blob, pos);
 
-        // If next byte looks like a reasonable string length
-        if (possibleLength > 0 && possibleLength < 10000 && pos + 1 + possibleLength <= blob.length) {
-          const extracted = blob.subarray(pos + 1, pos + 1 + possibleLength).toString('utf8');
+        // If it looks like a reasonable string length
+        if (possibleLength > 0 && possibleLength < 100000 && pos + bytesConsumed + possibleLength <= blob.length) {
+          const extracted = blob.subarray(pos + bytesConsumed, pos + bytesConsumed + possibleLength).toString('utf8');
           // Verify it looks like text (printable characters)
           if (isPrintableText(extracted)) {
             return extracted;
@@ -62,9 +104,9 @@ export function parseAttributedBody(blob: Buffer | null): string {
       }
 
       if (pos < blob.length) {
-        const possibleLength = blob[pos];
-        if (possibleLength > 0 && possibleLength < 10000 && pos + 1 + possibleLength <= blob.length) {
-          const extracted = blob.subarray(pos + 1, pos + 1 + possibleLength).toString('utf8');
+        const { length: possibleLength, bytesConsumed } = decodeTypedstreamLength(blob, pos);
+        if (possibleLength > 0 && possibleLength < 100000 && pos + bytesConsumed + possibleLength <= blob.length) {
+          const extracted = blob.subarray(pos + bytesConsumed, pos + bytesConsumed + possibleLength).toString('utf8');
           if (isPrintableText(extracted)) {
             return extracted;
           }

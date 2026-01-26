@@ -160,6 +160,51 @@ describe('MessagesService', () => {
       const query = mockDb.prepare.mock.calls[0][0];
       expect(query).toContain('m.is_from_me = ?');
     });
+
+    it('should filter by contact name', async () => {
+      // Mock contact resolution
+      executeCliMock.mockResolvedValue({
+        contacts: [
+          { id: 'contact-1', fullName: 'John Doe', phoneNumbers: [{ label: 'mobile', number: '+1234567890' }], emailAddresses: [{ label: 'home', email: 'john@example.com' }] },
+        ],
+      });
+      // Mock getChatIdsByIdentifiers query - returns chat IDs
+      mockStmt.all.mockReturnValueOnce([{ chat_id: 1 }, { chat_id: 2 }]);
+      // Mock the actual messages query
+      mockStmt.all.mockReturnValueOnce([
+        { ROWID: 1, guid: 'msg-1', text: 'Hello', attributedBody: null, date: 1700000000000000000, is_from_me: 1, handle_id: 0, cache_has_attachments: 0, chat_id: 1 },
+      ]);
+
+      const result = await service.listMessages({ contact: 'John Doe' });
+
+      expect(executeCliMock).toHaveBeenCalledWith(['--action', 'resolve-contact', '--name', 'John Doe']);
+      expect(result).toHaveLength(1);
+      // Verify the query includes chat_id IN clause
+      const queries = mockDb.prepare.mock.calls.map((c: string[]) => c[0]);
+      expect(queries.some((q: string) => q.includes('chat_id IN'))).toBe(true);
+    });
+
+    it('should return empty array when contact not found', async () => {
+      executeCliMock.mockResolvedValue({ contacts: [] });
+
+      const result = await service.listMessages({ contact: 'Unknown Person' });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should return empty array when contact has no matching chats', async () => {
+      executeCliMock.mockResolvedValue({
+        contacts: [
+          { id: 'contact-1', fullName: 'John Doe', phoneNumbers: [{ label: 'mobile', number: '+1234567890' }], emailAddresses: [] },
+        ],
+      });
+      // Mock getChatIdsByIdentifiers returning empty (no chats with this contact)
+      mockStmt.all.mockReturnValueOnce([]);
+
+      const result = await service.listMessages({ contact: 'John Doe' });
+
+      expect(result).toHaveLength(0);
+    });
   });
 
   describe('getMessage', () => {
@@ -194,6 +239,49 @@ describe('MessagesService', () => {
       expect(result).toHaveLength(1);
       const query = mockDb.prepare.mock.calls[0][0];
       expect(query).toContain('m.text LIKE ?');
+    });
+
+    it('should search messages filtered by contact name', async () => {
+      // Mock contact resolution
+      executeCliMock.mockResolvedValue({
+        contacts: [
+          { id: 'contact-1', fullName: 'Jane Smith', phoneNumbers: [{ label: 'mobile', number: '+0987654321' }], emailAddresses: [] },
+        ],
+      });
+      // Mock getChatIdsByIdentifiers query
+      mockStmt.all.mockReturnValueOnce([{ chat_id: 3 }]);
+      // Mock the actual search query
+      mockStmt.all.mockReturnValueOnce([
+        { ROWID: 5, guid: 'msg-5', text: 'Hello from Jane', attributedBody: null, date: 1700000000000000000, is_from_me: 0, handle_id: 1, cache_has_attachments: 0, chat_id: 3 },
+      ]);
+
+      const result = await service.searchMessages({ query: 'Hello', contact: 'Jane Smith' });
+
+      expect(executeCliMock).toHaveBeenCalledWith(['--action', 'resolve-contact', '--name', 'Jane Smith']);
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe('Hello from Jane');
+    });
+
+    it('should return empty array when searching with unknown contact', async () => {
+      executeCliMock.mockResolvedValue({ contacts: [] });
+
+      const result = await service.searchMessages({ query: 'hello', contact: 'Nobody' });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should return empty array when contact has no matching chats', async () => {
+      executeCliMock.mockResolvedValue({
+        contacts: [
+          { id: 'contact-1', fullName: 'Jane Smith', phoneNumbers: [{ label: 'mobile', number: '+0987654321' }], emailAddresses: [] },
+        ],
+      });
+      // No chats with this contact
+      mockStmt.all.mockReturnValueOnce([]);
+
+      const result = await service.searchMessages({ query: 'hello', contact: 'Jane Smith' });
+
+      expect(result).toHaveLength(0);
     });
   });
 

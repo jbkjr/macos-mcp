@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parseAttributedBody, getMessageText } from './parser.js';
+import { parseAttributedBody, getMessageText, decodeTypedstreamLength } from './parser.js';
 
 describe('parseAttributedBody', () => {
   it('should return empty string for null input', () => {
@@ -101,5 +101,127 @@ describe('getMessageText', () => {
   it('should return empty string when both are empty/null', () => {
     const result = getMessageText(null, null);
     expect(result).toBe('');
+  });
+});
+
+describe('decodeTypedstreamLength', () => {
+  it('should decode single byte length (< 0x80)', () => {
+    const blob = Buffer.from([0x50]); // 80 in decimal
+    const result = decodeTypedstreamLength(blob, 0);
+    expect(result.length).toBe(80);
+    expect(result.bytesConsumed).toBe(1);
+  });
+
+  it('should decode u16 length (0x81 marker)', () => {
+    // 0x81 followed by u16 little-endian: 300 = 0x012C -> bytes [0x2C, 0x01]
+    const blob = Buffer.from([0x81, 0x2c, 0x01]);
+    const result = decodeTypedstreamLength(blob, 0);
+    expect(result.length).toBe(300);
+    expect(result.bytesConsumed).toBe(3);
+  });
+
+  it('should decode u32 length (0x82 marker)', () => {
+    // 0x82 followed by u32 little-endian: 70000 = 0x00011170 -> bytes [0x70, 0x11, 0x01, 0x00]
+    const blob = Buffer.from([0x82, 0x70, 0x11, 0x01, 0x00]);
+    const result = decodeTypedstreamLength(blob, 0);
+    expect(result.length).toBe(70000);
+    expect(result.bytesConsumed).toBe(5);
+  });
+
+  it('should handle position past buffer end', () => {
+    const blob = Buffer.from([0x50]);
+    const result = decodeTypedstreamLength(blob, 5);
+    expect(result.length).toBe(0);
+    expect(result.bytesConsumed).toBe(0);
+  });
+
+  it('should handle truncated u16 (not enough bytes)', () => {
+    const blob = Buffer.from([0x81, 0x2c]); // Missing second byte
+    const result = decodeTypedstreamLength(blob, 0);
+    expect(result.length).toBe(0);
+    expect(result.bytesConsumed).toBe(1);
+  });
+
+  it('should handle truncated u32 (not enough bytes)', () => {
+    const blob = Buffer.from([0x82, 0x70, 0x11]); // Missing bytes
+    const result = decodeTypedstreamLength(blob, 0);
+    expect(result.length).toBe(0);
+    expect(result.bytesConsumed).toBe(1);
+  });
+});
+
+describe('parseAttributedBody with long messages', () => {
+  it('should extract text with 255 characters (boundary case)', () => {
+    const text = 'A'.repeat(255);
+    const marker = Buffer.from('NSString');
+    const lengthByte = Buffer.from([255]); // Single byte length
+    const textBuffer = Buffer.from(text);
+    const padding = Buffer.from([0, 0, 0, 0, 0]);
+
+    const blob = Buffer.concat([padding, marker, padding, lengthByte, textBuffer, padding]);
+
+    const result = parseAttributedBody(blob);
+    expect(result).toBe(text);
+    expect(result.length).toBe(255);
+  });
+
+  it('should extract text with 300 characters (u16 encoding)', () => {
+    const text = 'B'.repeat(300);
+    const marker = Buffer.from('NSString');
+    // u16 encoding: 0x81 followed by 300 (0x012C) in little-endian
+    const lengthBytes = Buffer.from([0x81, 0x2c, 0x01]);
+    const textBuffer = Buffer.from(text);
+    const padding = Buffer.from([0, 0, 0, 0, 0]);
+
+    const blob = Buffer.concat([padding, marker, padding, lengthBytes, textBuffer, padding]);
+
+    const result = parseAttributedBody(blob);
+    expect(result).toBe(text);
+    expect(result.length).toBe(300);
+  });
+
+  it('should extract text with 2500+ characters', () => {
+    const text = 'C'.repeat(2500);
+    const marker = Buffer.from('NSString');
+    // u16 encoding: 0x81 followed by 2500 (0x09C4) in little-endian
+    const lengthBytes = Buffer.from([0x81, 0xc4, 0x09]);
+    const textBuffer = Buffer.from(text);
+    const padding = Buffer.from([0, 0, 0, 0, 0]);
+
+    const blob = Buffer.concat([padding, marker, padding, lengthBytes, textBuffer, padding]);
+
+    const result = parseAttributedBody(blob);
+    expect(result).toBe(text);
+    expect(result.length).toBe(2500);
+  });
+
+  it('should extract text with 70000+ characters (u32 encoding)', () => {
+    const text = 'D'.repeat(70000);
+    const marker = Buffer.from('NSString');
+    // u32 encoding: 0x82 followed by 70000 in little-endian
+    const lengthBytes = Buffer.from([0x82, 0x70, 0x11, 0x01, 0x00]);
+    const textBuffer = Buffer.from(text);
+    const padding = Buffer.from([0, 0, 0, 0, 0]);
+
+    const blob = Buffer.concat([padding, marker, padding, lengthBytes, textBuffer, padding]);
+
+    const result = parseAttributedBody(blob);
+    expect(result).toBe(text);
+    expect(result.length).toBe(70000);
+  });
+
+  it('should extract NSMutableString with long text', () => {
+    const text = 'E'.repeat(500);
+    const marker = Buffer.from('NSMutableString');
+    // u16 encoding: 0x81 followed by 500 (0x01F4) in little-endian
+    const lengthBytes = Buffer.from([0x81, 0xf4, 0x01]);
+    const textBuffer = Buffer.from(text);
+    const padding = Buffer.from([0, 0, 0, 0, 0]);
+
+    const blob = Buffer.concat([padding, marker, padding, lengthBytes, textBuffer, padding]);
+
+    const result = parseAttributedBody(blob);
+    expect(result).toBe(text);
+    expect(result.length).toBe(500);
   });
 });

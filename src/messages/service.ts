@@ -156,18 +156,32 @@ export class MessagesService {
   /**
    * List messages with optional filters
    */
-  listMessages(options?: {
+  async listMessages(options?: {
     chatId?: string;
+    contact?: string;
     limit?: number;
     beforeDate?: string;
     afterDate?: string;
     fromMe?: boolean;
-  }): Message[] {
+  }): Promise<Message[]> {
     const limit = options?.limit ?? 50;
     const params: unknown[] = [];
     let whereClause = '1=1';
 
-    if (options?.chatId) {
+    // Resolve contact to chat IDs if provided
+    if (options?.contact) {
+      const identifiers = await this.resolveContactToIdentifiers(options.contact);
+      if (identifiers.length === 0) {
+        return []; // No matching contact found
+      }
+      const chatIds = this.getChatIdsByIdentifiers(identifiers);
+      if (chatIds.length === 0) {
+        return []; // Contact found but no chats with them
+      }
+      const placeholders = chatIds.map(() => '?').join(', ');
+      whereClause += ` AND cmj.chat_id IN (${placeholders})`;
+      params.push(...chatIds);
+    } else if (options?.chatId) {
       whereClause += ' AND cmj.chat_id = ?';
       params.push(parseInt(options.chatId, 10));
     }
@@ -243,17 +257,31 @@ export class MessagesService {
   /**
    * Search messages by text content
    */
-  searchMessages(options: {
+  async searchMessages(options: {
     query: string;
     chatId?: string;
+    contact?: string;
     limit?: number;
-  }): Message[] {
+  }): Promise<Message[]> {
     const limit = options.limit ?? 50;
     const searchPattern = `%${options.query}%`;
     const params: unknown[] = [searchPattern];
     let whereClause = 'm.text LIKE ?';
 
-    if (options.chatId) {
+    // Resolve contact to chat IDs if provided
+    if (options.contact) {
+      const identifiers = await this.resolveContactToIdentifiers(options.contact);
+      if (identifiers.length === 0) {
+        return []; // No matching contact found
+      }
+      const chatIds = this.getChatIdsByIdentifiers(identifiers);
+      if (chatIds.length === 0) {
+        return []; // Contact found but no chats with them
+      }
+      const placeholders = chatIds.map(() => '?').join(', ');
+      whereClause += ` AND cmj.chat_id IN (${placeholders})`;
+      params.push(...chatIds);
+    } else if (options.chatId) {
       whereClause += ' AND cmj.chat_id = ?';
       params.push(parseInt(options.chatId, 10));
     }
@@ -481,6 +509,35 @@ export class MessagesService {
   }
 
   // ============ Private Helpers ============
+
+  /**
+   * Get chat IDs for a list of handle identifiers (phone numbers, emails)
+   */
+  private getChatIdsByIdentifiers(identifiers: string[]): number[] {
+    if (identifiers.length === 0) return [];
+
+    const placeholders = identifiers.map(() => '?').join(', ');
+    const query = `
+      SELECT DISTINCT chj.chat_id
+      FROM chat_handle_join chj
+      JOIN handle h ON h.ROWID = chj.handle_id
+      WHERE h.id IN (${placeholders})
+    `;
+
+    const rows = executeQuery<{ chat_id: number }>(query, identifiers);
+    return rows.map((row) => row.chat_id);
+  }
+
+  /**
+   * Resolve a contact name to phone numbers and email addresses
+   */
+  private async resolveContactToIdentifiers(contactName: string): Promise<string[]> {
+    const contacts = await this.resolveContact({ name: contactName });
+    return contacts.flatMap((c) => [
+      ...c.phoneNumbers.map((p) => p.number),
+      ...c.emailAddresses.map((e) => e.email),
+    ]);
+  }
 
   private getChatParticipants(chatRowId: number): MessageHandle[] {
     const query = `

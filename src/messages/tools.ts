@@ -17,6 +17,7 @@ export const getMessageChatSchema = z.object({
 // Message tools
 export const listMessagesSchema = z.object({
   chatId: z.string().optional().describe('Filter messages by chat ID'),
+  contact: z.string().optional().describe('Filter by contact name, phone, or email (resolves to chat IDs automatically)'),
   limit: z.number().optional().describe('Maximum number of messages to return (default: 50)'),
   beforeDate: z.string().optional().describe('Filter messages before this date (ISO 8601)'),
   afterDate: z.string().optional().describe('Filter messages after this date (ISO 8601)'),
@@ -30,6 +31,7 @@ export const getMessageSchema = z.object({
 export const searchMessagesSchema = z.object({
   query: z.string().describe('Search term to find in message text'),
   chatId: z.string().optional().describe('Filter search to a specific chat'),
+  contact: z.string().optional().describe('Filter by contact name, phone, or email (resolves to chat IDs automatically)'),
   limit: z.number().optional().describe('Maximum number of results (default: 50)'),
 });
 
