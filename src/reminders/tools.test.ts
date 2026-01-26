@@ -13,6 +13,9 @@ import {
   createReminderSchema,
   updateReminderSchema,
   deleteReminderSchema,
+  dayOfWeekSchema,
+  recurrenceEndSchema,
+  recurrenceRuleSchema,
 } from './tools.js';
 
 describe('Reminders Tool Schemas', () => {
@@ -181,6 +184,182 @@ describe('Reminders Tool Schemas', () => {
 
     it('should accept valid id', () => {
       const result = deleteReminderSchema.safeParse({ id: 'reminder-123' });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  // Recurrence schemas
+  describe('dayOfWeekSchema', () => {
+    it('should require dayOfWeek', () => {
+      const result = dayOfWeekSchema.safeParse({});
+      expect(result.success).toBe(false);
+    });
+
+    it('should accept valid dayOfWeek (1-7)', () => {
+      for (let i = 1; i <= 7; i++) {
+        const result = dayOfWeekSchema.safeParse({ dayOfWeek: i });
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it('should reject invalid dayOfWeek', () => {
+      expect(dayOfWeekSchema.safeParse({ dayOfWeek: 0 }).success).toBe(false);
+      expect(dayOfWeekSchema.safeParse({ dayOfWeek: 8 }).success).toBe(false);
+    });
+
+    it('should accept optional weekNumber (-1 to 5)', () => {
+      expect(dayOfWeekSchema.safeParse({ dayOfWeek: 2, weekNumber: 1 }).success).toBe(true);
+      expect(dayOfWeekSchema.safeParse({ dayOfWeek: 2, weekNumber: -1 }).success).toBe(true);
+      expect(dayOfWeekSchema.safeParse({ dayOfWeek: 2, weekNumber: 5 }).success).toBe(true);
+    });
+
+    it('should reject invalid weekNumber', () => {
+      expect(dayOfWeekSchema.safeParse({ dayOfWeek: 2, weekNumber: 6 }).success).toBe(false);
+      expect(dayOfWeekSchema.safeParse({ dayOfWeek: 2, weekNumber: -2 }).success).toBe(false);
+    });
+  });
+
+  describe('recurrenceEndSchema', () => {
+    it('should accept type "never"', () => {
+      const result = recurrenceEndSchema.safeParse({ type: 'never' });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept type "date" with date', () => {
+      const result = recurrenceEndSchema.safeParse({ type: 'date', date: '2025-12-31T00:00:00Z' });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept type "count" with count', () => {
+      const result = recurrenceEndSchema.safeParse({ type: 'count', count: 10 });
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject invalid type', () => {
+      const result = recurrenceEndSchema.safeParse({ type: 'invalid' });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('recurrenceRuleSchema', () => {
+    it('should require frequency', () => {
+      const result = recurrenceRuleSchema.safeParse({});
+      expect(result.success).toBe(false);
+    });
+
+    it('should accept valid frequencies', () => {
+      const frequencies = ['daily', 'weekly', 'monthly', 'yearly'] as const;
+      for (const frequency of frequencies) {
+        const result = recurrenceRuleSchema.safeParse({ frequency });
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it('should default interval to 1', () => {
+      const result = recurrenceRuleSchema.safeParse({ frequency: 'daily' });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.interval).toBe(1);
+      }
+    });
+
+    it('should accept daily recurrence', () => {
+      const result = recurrenceRuleSchema.safeParse({
+        frequency: 'daily',
+        interval: 1,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept weekly recurrence with daysOfTheWeek', () => {
+      const result = recurrenceRuleSchema.safeParse({
+        frequency: 'weekly',
+        interval: 1,
+        daysOfTheWeek: [{ dayOfWeek: 2 }, { dayOfWeek: 4 }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept monthly recurrence with daysOfTheMonth', () => {
+      const result = recurrenceRuleSchema.safeParse({
+        frequency: 'monthly',
+        interval: 1,
+        daysOfTheMonth: [15, -1],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept monthly recurrence with weekNumber (e.g., first Monday)', () => {
+      const result = recurrenceRuleSchema.safeParse({
+        frequency: 'monthly',
+        interval: 1,
+        daysOfTheWeek: [{ dayOfWeek: 2, weekNumber: 1 }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept yearly recurrence with monthsOfTheYear', () => {
+      const result = recurrenceRuleSchema.safeParse({
+        frequency: 'yearly',
+        interval: 1,
+        monthsOfTheYear: [1, 6, 12],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept recurrence with end condition', () => {
+      const result = recurrenceRuleSchema.safeParse({
+        frequency: 'weekly',
+        interval: 2,
+        daysOfTheWeek: [{ dayOfWeek: 6 }],
+        end: { type: 'count', count: 10 },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept setPositions', () => {
+      const result = recurrenceRuleSchema.safeParse({
+        frequency: 'monthly',
+        interval: 1,
+        daysOfTheWeek: [{ dayOfWeek: 2 }],
+        setPositions: [1, -1],
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('createReminderSchema with recurrence', () => {
+    it('should accept reminder with recurrence', () => {
+      const result = createReminderSchema.safeParse({
+        title: 'Daily medication',
+        dueDate: '2025-01-25T09:00:00',
+        recurrence: { frequency: 'daily', interval: 1 },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept reminder without recurrence', () => {
+      const result = createReminderSchema.safeParse({
+        title: 'One-time task',
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('updateReminderSchema with recurrence', () => {
+    it('should accept null recurrence to remove', () => {
+      const result = updateReminderSchema.safeParse({
+        id: 'reminder-123',
+        recurrence: null,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept recurrence object to set/update', () => {
+      const result = updateReminderSchema.safeParse({
+        id: 'reminder-123',
+        recurrence: { frequency: 'weekly', interval: 1 },
+      });
       expect(result.success).toBe(true);
     });
   });

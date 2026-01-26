@@ -14,7 +14,32 @@ struct DeleteResult: Codable { let id: String; let deleted = true }
 
 // Reminder Models
 struct ListJSON: Codable { let id: String, title: String }
-struct ReminderJSON: Codable { let id: String, title: String, isCompleted: Bool, list: String, notes: String?, url: String?, dueDate: String? }
+
+// Recurrence Models
+struct DayOfWeekJSON: Codable {
+    let dayOfWeek: Int
+    let weekNumber: Int?
+}
+
+struct RecurrenceEndJSON: Codable {
+    let type: String  // "never", "date", "count"
+    let date: String?
+    let count: Int?
+}
+
+struct RecurrenceRuleJSON: Codable {
+    let frequency: String  // "daily", "weekly", "monthly", "yearly"
+    let interval: Int
+    let daysOfTheWeek: [DayOfWeekJSON]?
+    let daysOfTheMonth: [Int]?
+    let monthsOfTheYear: [Int]?
+    let weeksOfTheYear: [Int]?
+    let daysOfTheYear: [Int]?
+    let setPositions: [Int]?
+    let end: RecurrenceEndJSON?
+}
+
+struct ReminderJSON: Codable { let id: String, title: String, isCompleted: Bool, list: String, notes: String?, url: String?, dueDate: String?, recurrence: RecurrenceRuleJSON? }
 struct ReadResult: Codable { let lists: [ListJSON]; let reminders: [ReminderJSON] }
 struct DeleteListResult: Codable { let title: String; let deleted = true }
 
@@ -211,6 +236,138 @@ private func formatEventDate(_ date: Date, preferredTimeZone: TimeZone, includeT
     return formatter.string(from: date)
 }
 
+// MARK: - Recurrence Rule Helpers
+private func frequencyToString(_ frequency: EKRecurrenceFrequency) -> String {
+    switch frequency {
+    case .daily: return "daily"
+    case .weekly: return "weekly"
+    case .monthly: return "monthly"
+    case .yearly: return "yearly"
+    @unknown default: return "daily"
+    }
+}
+
+private func stringToFrequency(_ string: String) -> EKRecurrenceFrequency {
+    switch string.lowercased() {
+    case "daily": return .daily
+    case "weekly": return .weekly
+    case "monthly": return .monthly
+    case "yearly": return .yearly
+    default: return .daily
+    }
+}
+
+private func recurrenceRuleToJSON(_ rule: EKRecurrenceRule) -> RecurrenceRuleJSON {
+    let frequency = frequencyToString(rule.frequency)
+    let interval = rule.interval
+
+    // Convert daysOfTheWeek
+    let daysOfTheWeek: [DayOfWeekJSON]? = rule.daysOfTheWeek?.map { day in
+        DayOfWeekJSON(dayOfWeek: day.dayOfTheWeek.rawValue, weekNumber: day.weekNumber == 0 ? nil : day.weekNumber)
+    }
+
+    // Convert daysOfTheMonth (NSNumber array)
+    let daysOfTheMonth: [Int]? = rule.daysOfTheMonth?.map { $0.intValue }
+
+    // Convert monthsOfTheYear (NSNumber array)
+    let monthsOfTheYear: [Int]? = rule.monthsOfTheYear?.map { $0.intValue }
+
+    // Convert weeksOfTheYear (NSNumber array)
+    let weeksOfTheYear: [Int]? = rule.weeksOfTheYear?.map { $0.intValue }
+
+    // Convert daysOfTheYear (NSNumber array)
+    let daysOfTheYear: [Int]? = rule.daysOfTheYear?.map { $0.intValue }
+
+    // Convert setPositions (NSNumber array)
+    let setPositions: [Int]? = rule.setPositions?.map { $0.intValue }
+
+    // Convert recurrence end
+    var end: RecurrenceEndJSON? = nil
+    if let recurrenceEnd = rule.recurrenceEnd {
+        if let endDate = recurrenceEnd.endDate {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+            formatter.timeZone = TimeZone.current
+            end = RecurrenceEndJSON(type: "date", date: formatter.string(from: endDate), count: nil)
+        } else if recurrenceEnd.occurrenceCount > 0 {
+            end = RecurrenceEndJSON(type: "count", date: nil, count: recurrenceEnd.occurrenceCount)
+        }
+    }
+
+    return RecurrenceRuleJSON(
+        frequency: frequency,
+        interval: interval,
+        daysOfTheWeek: daysOfTheWeek,
+        daysOfTheMonth: daysOfTheMonth,
+        monthsOfTheYear: monthsOfTheYear,
+        weeksOfTheYear: weeksOfTheYear,
+        daysOfTheYear: daysOfTheYear,
+        setPositions: setPositions,
+        end: end
+    )
+}
+
+private func parseRecurrenceRule(from jsonString: String) -> EKRecurrenceRule? {
+    guard !jsonString.isEmpty else { return nil }
+
+    guard let data = jsonString.data(using: .utf8),
+          let json = try? JSONDecoder().decode(RecurrenceRuleJSON.self, from: data) else {
+        return nil
+    }
+
+    let frequency = stringToFrequency(json.frequency)
+    let interval = json.interval
+
+    // Convert daysOfTheWeek
+    var daysOfTheWeek: [EKRecurrenceDayOfWeek]? = nil
+    if let days = json.daysOfTheWeek {
+        daysOfTheWeek = days.compactMap { dayJSON in
+            guard let weekday = EKWeekday(rawValue: dayJSON.dayOfWeek) else { return nil }
+            if let weekNumber = dayJSON.weekNumber {
+                return EKRecurrenceDayOfWeek(weekday, weekNumber: weekNumber)
+            }
+            return EKRecurrenceDayOfWeek(weekday)
+        }
+    }
+
+    // Convert arrays to NSNumber arrays
+    let daysOfTheMonth: [NSNumber]? = json.daysOfTheMonth?.map { NSNumber(value: $0) }
+    let monthsOfTheYear: [NSNumber]? = json.monthsOfTheYear?.map { NSNumber(value: $0) }
+    let weeksOfTheYear: [NSNumber]? = json.weeksOfTheYear?.map { NSNumber(value: $0) }
+    let daysOfTheYear: [NSNumber]? = json.daysOfTheYear?.map { NSNumber(value: $0) }
+    let setPositions: [NSNumber]? = json.setPositions?.map { NSNumber(value: $0) }
+
+    // Convert recurrence end
+    var recurrenceEnd: EKRecurrenceEnd? = nil
+    if let end = json.end {
+        switch end.type {
+        case "date":
+            if let dateStr = end.date, let date = parseDate(from: dateStr) {
+                recurrenceEnd = EKRecurrenceEnd(end: date)
+            }
+        case "count":
+            if let count = end.count {
+                recurrenceEnd = EKRecurrenceEnd(occurrenceCount: count)
+            }
+        default:
+            break // "never" or unknown = no end
+        }
+    }
+
+    return EKRecurrenceRule(
+        recurrenceWith: frequency,
+        interval: interval,
+        daysOfTheWeek: daysOfTheWeek,
+        daysOfTheMonth: daysOfTheMonth,
+        monthsOfTheYear: monthsOfTheYear,
+        weeksOfTheYear: weeksOfTheYear,
+        daysOfTheYear: daysOfTheYear,
+        setPositions: setPositions,
+        end: recurrenceEnd
+    )
+}
+
 // MARK: - EventKitManager Class
 class EventKitManager {
     private let eventStore = EKEventStore()
@@ -403,7 +560,7 @@ class EventKitManager {
         return findReminder(withId: id)?.toJSON()
     }
 
-    func createReminder(title: String, listName: String?, notes: String?, urlString: String?, dueDateString: String?) throws -> ReminderJSON {
+    func createReminder(title: String, listName: String?, notes: String?, urlString: String?, dueDateString: String?, recurrenceString: String?) throws -> ReminderJSON {
         let reminder = EKReminder(eventStore: eventStore)
         reminder.calendar = try findList(named: listName)
         reminder.title = title
@@ -428,11 +585,18 @@ class EventKitManager {
                 reminder.timeZone = parsedComponents.timeZone
             }
         }
+
+        // Apply recurrence rule
+        if let recurrenceStr = recurrenceString, !recurrenceStr.isEmpty,
+           let rule = parseRecurrenceRule(from: recurrenceStr) {
+            reminder.recurrenceRules = [rule]
+        }
+
         try eventStore.save(reminder, commit: true)
         return reminder.toJSON()
     }
 
-    func updateReminder(id: String, newTitle: String?, listName: String?, notes: String?, urlString: String?, isCompleted: Bool?, dueDateString: String?) throws -> ReminderJSON {
+    func updateReminder(id: String, newTitle: String?, listName: String?, notes: String?, urlString: String?, isCompleted: Bool?, dueDateString: String?, recurrenceString: String?) throws -> ReminderJSON {
         guard let reminder = findReminder(withId: id) else {
             throw NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "ID '\(id)' not found."])
         }
@@ -480,6 +644,16 @@ class EventKitManager {
                 reminder.timeZone = nil
             }
         }
+
+        // Handle recurrence: empty string = remove, non-empty = set/update
+        if let recurrenceStr = recurrenceString {
+            if recurrenceStr.isEmpty {
+                reminder.recurrenceRules = nil
+            } else if let rule = parseRecurrenceRule(from: recurrenceStr) {
+                reminder.recurrenceRules = [rule]
+            }
+        }
+
         try eventStore.save(reminder, commit: true)
         return reminder.toJSON()
     }
@@ -514,14 +688,18 @@ class EventKitManager {
 // MARK: - Extensions
 extension EKReminder {
     func toJSON() -> ReminderJSON {
-        ReminderJSON(
+        // Get recurrence rule if present
+        let recurrence: RecurrenceRuleJSON? = self.recurrenceRules?.first.map { recurrenceRuleToJSON($0) }
+
+        return ReminderJSON(
             id: self.calendarItemIdentifier,
             title: self.title,
             isCompleted: self.isCompleted,
             list: self.calendar.title,
             notes: self.notes,
             url: self.url?.absoluteString,
-            dueDate: formatDueDateWithTimezone(from: self.dueDateComponents, timeZoneHint: self.timeZone)
+            dueDate: formatDueDateWithTimezone(from: self.dueDateComponents, timeZoneHint: self.timeZone),
+            recurrence: recurrence
         )
     }
 }
@@ -710,7 +888,8 @@ func main() {
                     listName: parser.get("targetList"),
                     notes: parser.get("note"),
                     urlString: parser.get("url"),
-                    dueDateString: parser.get("dueDate")
+                    dueDateString: parser.get("dueDate"),
+                    recurrenceString: parser.get("recurrence")
                 )
                 try outputResult(reminder)
             case "update-reminder":
@@ -721,7 +900,8 @@ func main() {
                     notes: parser.get("note"),
                     urlString: parser.get("url"),
                     isCompleted: parser.get("completed").map { $0 == "true" },
-                    dueDateString: parser.get("dueDate")
+                    dueDateString: parser.get("dueDate"),
+                    recurrenceString: parser.get("recurrence")
                 )
                 try outputResult(reminder)
             case "delete-reminder":

@@ -11,6 +11,7 @@ import type {
   DeleteResult,
   DeleteListResult,
   DueWithinOption,
+  RecurrenceRule,
 } from './types.js';
 
 /**
@@ -78,14 +79,19 @@ export class RemindersService {
     notes?: string;
     url?: string;
     dueDate?: string;
+    recurrence?: RecurrenceRule;
   }): Promise<Reminder> {
     const args = ['--action', 'create-reminder', '--title', options.title];
-    addOptionalArgs(args, options, {
+    const { recurrence, ...restOptions } = options;
+    addOptionalArgs(args, restOptions, {
       targetList: '--targetList',
       notes: '--note',
       url: '--url',
       dueDate: '--dueDate',
     });
+    if (recurrence) {
+      args.push('--recurrence', JSON.stringify(recurrence));
+    }
     return executeCli<Reminder>(args);
   }
 
@@ -98,10 +104,12 @@ export class RemindersService {
       url?: string;
       dueDate?: string;
       completed?: boolean;
+      recurrence?: RecurrenceRule | null;
     }
   ): Promise<Reminder> {
     const args = ['--action', 'update-reminder', '--id', id];
-    addOptionalArgs(args, updates, {
+    const { recurrence, ...restUpdates } = updates;
+    addOptionalArgs(args, restUpdates, {
       title: '--title',
       targetList: '--targetList',
       notes: '--note',
@@ -109,6 +117,14 @@ export class RemindersService {
       dueDate: '--dueDate',
       completed: '--completed',
     });
+    // Handle recurrence: null = remove, object = set/update
+    if (recurrence !== undefined) {
+      if (recurrence === null) {
+        args.push('--recurrence', '');
+      } else {
+        args.push('--recurrence', JSON.stringify(recurrence));
+      }
+    }
     return executeCli<Reminder>(args);
   }
 

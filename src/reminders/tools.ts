@@ -7,6 +7,30 @@ import { z } from 'zod';
 // Due within options
 const dueWithinOptions = ['today', 'tomorrow', 'this-week', 'overdue', 'no-date'] as const;
 
+// Recurrence schemas
+export const dayOfWeekSchema = z.object({
+  dayOfWeek: z.number().int().min(1).max(7).describe('Day of week: 1=Sunday, 2=Monday, ..., 7=Saturday'),
+  weekNumber: z.number().int().min(-1).max(5).optional().describe('For monthly/yearly: 1-5 or -1 (last)'),
+});
+
+export const recurrenceEndSchema = z.object({
+  type: z.enum(['never', 'date', 'count']).describe('End condition type'),
+  date: z.string().optional().describe('ISO 8601 date when type="date"'),
+  count: z.number().int().positive().optional().describe('Number of occurrences when type="count"'),
+});
+
+export const recurrenceRuleSchema = z.object({
+  frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']).describe('Recurrence frequency'),
+  interval: z.number().int().positive().default(1).describe('Interval between occurrences (e.g., 2 = every 2 weeks)'),
+  daysOfTheWeek: z.array(dayOfWeekSchema).optional().describe('Days of week (weekly/monthly/yearly)'),
+  daysOfTheMonth: z.array(z.number().int().min(-31).max(31)).optional().describe('Days of month (monthly only, 1-31, negative from end)'),
+  monthsOfTheYear: z.array(z.number().int().min(1).max(12)).optional().describe('Months of year (yearly only, 1-12)'),
+  weeksOfTheYear: z.array(z.number().int().min(-53).max(53)).optional().describe('Weeks of year (yearly only, 1-53, negative from end)'),
+  daysOfTheYear: z.array(z.number().int().min(-366).max(366)).optional().describe('Days of year (yearly only, 1-366, negative from end)'),
+  setPositions: z.array(z.number().int().min(-366).max(366)).optional().describe('Filter occurrences (e.g., [1, -1] = first and last)'),
+  end: recurrenceEndSchema.optional().describe('End condition'),
+});
+
 // List tools
 export const listReminderListsSchema = z.object({});
 
@@ -41,6 +65,7 @@ export const createReminderSchema = z.object({
   notes: z.string().optional().describe('Additional notes for the reminder'),
   url: z.string().url().optional().describe('A URL to associate with the reminder'),
   dueDate: z.string().optional().describe("Due date (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"),
+  recurrence: recurrenceRuleSchema.optional().describe('Recurrence rule for repeating reminders'),
 });
 
 export const updateReminderSchema = z.object({
@@ -51,6 +76,7 @@ export const updateReminderSchema = z.object({
   url: z.string().optional().describe('New URL for the reminder (empty string to remove)'),
   dueDate: z.string().optional().describe("New due date (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601, empty string to remove)"),
   completed: z.boolean().optional().describe('Mark the reminder as completed or not'),
+  recurrence: recurrenceRuleSchema.nullable().optional().describe('Recurrence rule (null to remove, object to set/update)'),
 });
 
 export const deleteReminderSchema = z.object({

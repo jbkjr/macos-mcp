@@ -264,4 +264,94 @@ describe('RemindersService', () => {
       expect(result).toEqual(mockResult);
     });
   });
+
+  // Recurrence tests
+  describe('createReminder with recurrence', () => {
+    it('should serialize recurrence as JSON string', async () => {
+      executeCliMock.mockResolvedValue({});
+
+      const recurrence = { frequency: 'daily', interval: 1 };
+      await service.createReminder({
+        title: 'Daily task',
+        recurrence: recurrence as any,
+      });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'create-reminder',
+        '--title', 'Daily task',
+        '--recurrence', JSON.stringify(recurrence),
+      ]);
+    });
+
+    it('should serialize complex recurrence rule', async () => {
+      executeCliMock.mockResolvedValue({});
+
+      const recurrence = {
+        frequency: 'weekly',
+        interval: 2,
+        daysOfTheWeek: [{ dayOfWeek: 2 }, { dayOfWeek: 4 }],
+        end: { type: 'count', count: 10 },
+      };
+      await service.createReminder({
+        title: 'Biweekly meeting',
+        recurrence: recurrence as any,
+      });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'create-reminder',
+        '--title', 'Biweekly meeting',
+        '--recurrence', JSON.stringify(recurrence),
+      ]);
+    });
+
+    it('should not include recurrence when not provided', async () => {
+      executeCliMock.mockResolvedValue({});
+
+      await service.createReminder({ title: 'One-time task' });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'create-reminder',
+        '--title', 'One-time task',
+      ]);
+    });
+  });
+
+  describe('updateReminder with recurrence', () => {
+    it('should pass empty string to remove recurrence', async () => {
+      executeCliMock.mockResolvedValue({});
+
+      await service.updateReminder('rem-1', { recurrence: null });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'update-reminder',
+        '--id', 'rem-1',
+        '--recurrence', '',
+      ]);
+    });
+
+    it('should serialize recurrence to update', async () => {
+      executeCliMock.mockResolvedValue({});
+
+      const recurrence = { frequency: 'monthly', interval: 1 };
+      await service.updateReminder('rem-1', { recurrence: recurrence as any });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'update-reminder',
+        '--id', 'rem-1',
+        '--recurrence', JSON.stringify(recurrence),
+      ]);
+    });
+
+    it('should not include recurrence when undefined', async () => {
+      executeCliMock.mockResolvedValue({});
+
+      await service.updateReminder('rem-1', { title: 'Updated' });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'update-reminder',
+        '--id', 'rem-1',
+        '--title', 'Updated',
+      ]);
+    });
+  });
 });
