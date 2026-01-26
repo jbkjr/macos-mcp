@@ -116,7 +116,7 @@ describe('RemindersService', () => {
     });
 
     it('should handle different dueWithin options', async () => {
-      const dueOptions = ['today', 'tomorrow', 'this-week', 'overdue', 'no-date'] as const;
+      const dueOptions = ['today', 'tomorrow', 'this-week', 'overdue', 'no-date', 'scheduled'] as const;
 
       for (const option of dueOptions) {
         executeCliMock.mockResolvedValue({ lists: [], reminders: [] });
@@ -128,6 +128,29 @@ describe('RemindersService', () => {
           '--dueWithin', option,
         ]);
       }
+    });
+
+    it('should include priority filter', async () => {
+      executeCliMock.mockResolvedValue({ lists: [], reminders: [] });
+
+      await service.listReminders({ priority: 'high' });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'read-reminders',
+        '--priority', 'high',
+      ]);
+    });
+
+    it('should combine dueWithin and priority filters', async () => {
+      executeCliMock.mockResolvedValue({ lists: [], reminders: [] });
+
+      await service.listReminders({ dueWithin: 'scheduled', priority: 'medium' });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'read-reminders',
+        '--dueWithin', 'scheduled',
+        '--priority', 'medium',
+      ]);
     });
   });
 
@@ -186,6 +209,21 @@ describe('RemindersService', () => {
         '--note', 'Important task',
         '--url', 'https://example.com',
         '--dueDate', '2025-01-25 10:00:00',
+      ]);
+    });
+
+    it('should include priority', async () => {
+      executeCliMock.mockResolvedValue({});
+
+      await service.createReminder({
+        title: 'Urgent Task',
+        priority: 'high',
+      });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'create-reminder',
+        '--title', 'Urgent Task',
+        '--priority', 'high',
       ]);
     });
   });
@@ -249,6 +287,18 @@ describe('RemindersService', () => {
         '--note', '',
         '--url', '',
         '--dueDate', '',
+      ]);
+    });
+
+    it('should include priority update', async () => {
+      executeCliMock.mockResolvedValue({});
+
+      await service.updateReminder('rem-1', { priority: 'low' });
+
+      expect(executeCliMock).toHaveBeenCalledWith([
+        '--action', 'update-reminder',
+        '--id', 'rem-1',
+        '--priority', 'low',
       ]);
     });
   });

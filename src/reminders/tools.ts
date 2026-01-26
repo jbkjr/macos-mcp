@@ -5,7 +5,10 @@
 import { z } from 'zod';
 
 // Due within options
-const dueWithinOptions = ['today', 'tomorrow', 'this-week', 'overdue', 'no-date'] as const;
+const dueWithinOptions = ['today', 'tomorrow', 'this-week', 'overdue', 'no-date', 'scheduled'] as const;
+
+// Priority options
+const priorityOptions = ['none', 'low', 'medium', 'high'] as const;
 
 // Recurrence schemas
 export const dayOfWeekSchema = z.object({
@@ -53,6 +56,7 @@ export const listRemindersSchema = z.object({
   showCompleted: z.boolean().optional().describe('Include completed reminders (default: false)'),
   search: z.string().optional().describe('Search term to filter reminders by title or notes'),
   dueWithin: z.enum(dueWithinOptions).optional().describe('Filter reminders by due date range'),
+  priority: z.enum(priorityOptions).optional().describe('Filter reminders by priority level'),
 });
 
 export const getReminderSchema = z.object({
@@ -66,6 +70,7 @@ export const createReminderSchema = z.object({
   url: z.string().url().optional().describe('A URL to associate with the reminder'),
   dueDate: z.string().optional().describe("Due date (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"),
   recurrence: recurrenceRuleSchema.optional().describe('Recurrence rule for repeating reminders'),
+  priority: z.enum(priorityOptions).optional().describe('Priority level (none, low, medium, high)'),
 });
 
 export const updateReminderSchema = z.object({
@@ -77,6 +82,7 @@ export const updateReminderSchema = z.object({
   dueDate: z.string().optional().describe("New due date (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601, empty string to remove)"),
   completed: z.boolean().optional().describe('Mark the reminder as completed or not'),
   recurrence: recurrenceRuleSchema.nullable().optional().describe('Recurrence rule (null to remove, object to set/update)'),
+  priority: z.enum(priorityOptions).optional().describe('Priority level (none, low, medium, high)'),
 });
 
 export const deleteReminderSchema = z.object({

@@ -39,7 +39,7 @@ struct RecurrenceRuleJSON: Codable {
     let end: RecurrenceEndJSON?
 }
 
-struct ReminderJSON: Codable { let id: String, title: String, isCompleted: Bool, list: String, notes: String?, url: String?, dueDate: String?, recurrence: RecurrenceRuleJSON? }
+struct ReminderJSON: Codable { let id: String, title: String, isCompleted: Bool, list: String, notes: String?, url: String?, dueDate: String?, recurrence: RecurrenceRuleJSON?, priority: String? }
 struct ReadResult: Codable { let lists: [ListJSON]; let reminders: [ReminderJSON] }
 struct DeleteListResult: Codable { let title: String; let deleted = true }
 
@@ -331,6 +331,26 @@ private func parseRecurrenceRule(from jsonString: String) -> EKRecurrenceRule? {
     )
 }
 
+// MARK: - Priority Helpers
+private func priorityToString(_ priority: Int) -> String? {
+    switch priority {
+    case 1...4: return "high"
+    case 5: return "medium"
+    case 6...9: return "low"
+    default: return nil  // 0 = none/no priority
+    }
+}
+
+private func stringToPriority(_ string: String?) -> Int {
+    guard let str = string?.lowercased() else { return 0 }
+    switch str {
+    case "high": return 1
+    case "medium": return 5
+    case "low": return 9
+    default: return 0  // "none" or any other value
+    }
+}
+
 // MARK: - EventKitManager Class
 class EventKitManager {
     private let eventStore = EKEventStore()
@@ -484,7 +504,7 @@ class EventKitManager {
         return eventStore.calendars(for: .reminder).map { ListJSON(id: $0.calendarIdentifier, title: $0.title) }
     }
 
-    func getReminders(showCompleted: Bool, filterList: String?, search: String?, dueWithin: String?) throws -> [ReminderJSON] {
+    func getReminders(showCompleted: Bool, filterList: String?, search: String?, dueWithin: String?, priority: String?) throws -> [ReminderJSON] {
         let predicate = eventStore.predicateForReminders(in: nil)
         let semaphore = DispatchSemaphore(value: 0)
         var fetchedReminders: [EKReminder]?
@@ -506,6 +526,7 @@ class EventKitManager {
             let todayStart = Calendar.current.startOfDay(for: now)
             filtered = filtered.filter { reminder in
                 guard let dueDate = reminder.dueDateComponents?.date else { return dueFilter == "no-date" }
+                if dueFilter == "scheduled" { return true }  // has due date
                 if dueFilter == "overdue" { return dueDate < todayStart }
                 if dueFilter == "today" { return Calendar.current.isDateInToday(dueDate) }
                 if dueFilter == "tomorrow" { return Calendar.current.isDateInTomorrow(dueDate) }
@@ -516,6 +537,16 @@ class EventKitManager {
                 return false
             }
         }
+        if let priorityFilter = priority?.lowercased() {
+            filtered = filtered.filter { reminder in
+                if priorityFilter == "none" {
+                    return reminder.priority == 0
+                }
+                // Map reminder priority to same bucket
+                let reminderPriorityString = priorityToString(reminder.priority) ?? "none"
+                return reminderPriorityString == priorityFilter
+            }
+        }
         return filtered.map { $0.toJSON() }
     }
 
@@ -523,7 +554,7 @@ class EventKitManager {
         return findReminder(withId: id)?.toJSON()
     }
 
-    func createReminder(title: String, listName: String?, notes: String?, urlString: String?, dueDateString: String?, recurrenceString: String?) throws -> ReminderJSON {
+    func createReminder(title: String, listName: String?, notes: String?, urlString: String?, dueDateString: String?, recurrenceString: String?, priorityString: String?) throws -> ReminderJSON {
         let reminder = EKReminder(eventStore: eventStore)
         reminder.calendar = try findList(named: listName)
         reminder.title = title
@@ -555,11 +586,16 @@ class EventKitManager {
             reminder.recurrenceRules = [rule]
         }
 
+        // Apply priority
+        if let priorityStr = priorityString {
+            reminder.priority = stringToPriority(priorityStr)
+        }
+
         try eventStore.save(reminder, commit: true)
         return reminder.toJSON()
     }
 
-    func updateReminder(id: String, newTitle: String?, listName: String?, notes: String?, urlString: String?, isCompleted: Bool?, dueDateString: String?, recurrenceString: String?) throws -> ReminderJSON {
+    func updateReminder(id: String, newTitle: String?, listName: String?, notes: String?, urlString: String?, isCompleted: Bool?, dueDateString: String?, recurrenceString: String?, priorityString: String?) throws -> ReminderJSON {
         guard let reminder = findReminder(withId: id) else {
             throw NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "ID '\(id)' not found."])
         }
@@ -617,6 +653,11 @@ class EventKitManager {
             }
         }
 
+        // Handle priority
+        if let priorityStr = priorityString {
+            reminder.priority = stringToPriority(priorityStr)
+        }
+
         try eventStore.save(reminder, commit: true)
         return reminder.toJSON()
     }
@@ -662,7 +703,8 @@ extension EKReminder {
             notes: self.notes,
             url: self.url?.absoluteString,
             dueDate: formatDueDateWithTimezone(from: self.dueDateComponents, timeZoneHint: self.timeZone),
-            recurrence: recurrence
+            recurrence: recurrence,
+            priority: priorityToString(self.priority)
         )
     }
 }
@@ -836,7 +878,8 @@ func main() {
                     showCompleted: parser.get("showCompleted") == "true",
                     filterList: parser.get("filterList"),
                     search: parser.get("search"),
-                    dueWithin: parser.get("dueWithin")
+                    dueWithin: parser.get("dueWithin"),
+                    priority: parser.get("priority")
                 )
                 try outputResult(ReadResult(lists: manager.getLists(), reminders: reminders))
             case "get-reminder":
@@ -852,7 +895,8 @@ func main() {
                     notes: parser.get("note"),
                     urlString: parser.get("url"),
                     dueDateString: parser.get("dueDate"),
-                    recurrenceString: parser.get("recurrence")
+                    recurrenceString: parser.get("recurrence"),
+                    priorityString: parser.get("priority")
                 )
                 try outputResult(reminder)
             case "update-reminder":
@@ -864,7 +908,8 @@ func main() {
                     urlString: parser.get("url"),
                     isCompleted: parser.get("completed").map { $0 == "true" },
                     dueDateString: parser.get("dueDate"),
-                    recurrenceString: parser.get("recurrence")
+                    recurrenceString: parser.get("recurrence"),
+                    priorityString: parser.get("priority")
                 )
                 try outputResult(reminder)
             case "delete-reminder":

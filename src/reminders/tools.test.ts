@@ -87,7 +87,7 @@ describe('Reminders Tool Schemas', () => {
     });
 
     it('should validate dueWithin enum', () => {
-      const validOptions = ['today', 'tomorrow', 'this-week', 'overdue', 'no-date'];
+      const validOptions = ['today', 'tomorrow', 'this-week', 'overdue', 'no-date', 'scheduled'];
       for (const option of validOptions) {
         const result = listRemindersSchema.safeParse({ dueWithin: option });
         expect(result.success).toBe(true);
@@ -95,6 +95,25 @@ describe('Reminders Tool Schemas', () => {
 
       const invalid = listRemindersSchema.safeParse({ dueWithin: 'invalid' });
       expect(invalid.success).toBe(false);
+    });
+
+    it('should validate priority enum', () => {
+      const validOptions = ['none', 'low', 'medium', 'high'];
+      for (const option of validOptions) {
+        const result = listRemindersSchema.safeParse({ priority: option });
+        expect(result.success).toBe(true);
+      }
+
+      const invalid = listRemindersSchema.safeParse({ priority: 'invalid' });
+      expect(invalid.success).toBe(false);
+    });
+
+    it('should accept priority filter', () => {
+      const result = listRemindersSchema.safeParse({
+        filterList: 'Work',
+        priority: 'high',
+      });
+      expect(result.success).toBe(true);
     });
   });
 
@@ -139,6 +158,19 @@ describe('Reminders Tool Schemas', () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it('should accept valid priority', () => {
+      const validPriorities = ['none', 'low', 'medium', 'high'];
+      for (const priority of validPriorities) {
+        const result = createReminderSchema.safeParse({ title: 'Task', priority });
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it('should reject invalid priority', () => {
+      const result = createReminderSchema.safeParse({ title: 'Task', priority: 'urgent' });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('updateReminderSchema', () => {
@@ -173,6 +205,22 @@ describe('Reminders Tool Schemas', () => {
         dueDate: '',
       });
       expect(result.success).toBe(true);
+    });
+
+    it('should accept valid priority', () => {
+      const result = updateReminderSchema.safeParse({
+        id: 'reminder-123',
+        priority: 'high',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject invalid priority', () => {
+      const result = updateReminderSchema.safeParse({
+        id: 'reminder-123',
+        priority: 'critical',
+      });
+      expect(result.success).toBe(false);
     });
   });
 

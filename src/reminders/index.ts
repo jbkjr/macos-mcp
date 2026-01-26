@@ -18,7 +18,7 @@ import {
   updateReminderSchema,
   deleteReminderSchema,
 } from './tools.js';
-import type { DueWithinOption } from './types.js';
+import type { DueWithinOption, ReminderPriority } from './types.js';
 
 export { RemindersService } from './service.js';
 export * from './types.js';
@@ -62,12 +62,13 @@ export function registerReminderTools(server: McpServer): void {
   // Reminder tools
   server.tool(
     'list_reminders',
-    'List reminders with optional filters (list, search, due date range)',
+    'List reminders with optional filters (list, search, due date range, priority)',
     listRemindersSchema.shape,
     wrapToolHandler(async (params) => {
       return service.listReminders({
         ...params,
         dueWithin: params.dueWithin as DueWithinOption | undefined,
+        priority: params.priority as ReminderPriority | undefined,
       });
     })
   );

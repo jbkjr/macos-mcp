@@ -54,6 +54,7 @@ export interface Reminder {
   url?: string;
   dueDate?: string;
   recurrence?: RecurrenceRule;
+  priority?: ReminderPriority;
 }
 
 export interface RemindersReadResult {
@@ -71,4 +72,6 @@ export interface DeleteListResult {
   deleted: boolean;
 }
 
-export type DueWithinOption = 'today' | 'tomorrow' | 'this-week' | 'overdue' | 'no-date';
+export type DueWithinOption = 'today' | 'tomorrow' | 'this-week' | 'overdue' | 'no-date' | 'scheduled';
+
+export type ReminderPriority = 'none' | 'low' | 'medium' | 'high';

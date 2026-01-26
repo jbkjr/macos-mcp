@@ -12,6 +12,7 @@ import type {
   DeleteListResult,
   DueWithinOption,
   RecurrenceRule,
+  ReminderPriority,
 } from './types.js';
 
 /**
@@ -56,6 +57,7 @@ export class RemindersService {
     showCompleted?: boolean;
     search?: string;
     dueWithin?: DueWithinOption;
+    priority?: ReminderPriority;
   }): Promise<RemindersReadResult> {
     const args = ['--action', 'read-reminders'];
     if (options) {
@@ -64,6 +66,7 @@ export class RemindersService {
         showCompleted: '--showCompleted',
         search: '--search',
         dueWithin: '--dueWithin',
+        priority: '--priority',
       });
     }
     return executeCli<RemindersReadResult>(args);
@@ -80,6 +83,7 @@ export class RemindersService {
     url?: string;
     dueDate?: string;
     recurrence?: RecurrenceRule;
+    priority?: ReminderPriority;
   }): Promise<Reminder> {
     const args = ['--action', 'create-reminder', '--title', options.title];
     const { recurrence, ...restOptions } = options;
@@ -88,6 +92,7 @@ export class RemindersService {
       notes: '--note',
       url: '--url',
       dueDate: '--dueDate',
+      priority: '--priority',
     });
     if (recurrence) {
       args.push('--recurrence', JSON.stringify(recurrence));
@@ -105,6 +110,7 @@ export class RemindersService {
       dueDate?: string;
       completed?: boolean;
       recurrence?: RecurrenceRule | null;
+      priority?: ReminderPriority;
     }
   ): Promise<Reminder> {
     const args = ['--action', 'update-reminder', '--id', id];
@@ -116,6 +122,7 @@ export class RemindersService {
       url: '--url',
       dueDate: '--dueDate',
       completed: '--completed',
+      priority: '--priority',
     });
     if (recurrence !== undefined) {
       args.push('--recurrence', recurrence === null ? '' : JSON.stringify(recurrence));
