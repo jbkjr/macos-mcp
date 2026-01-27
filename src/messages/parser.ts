@@ -6,6 +6,10 @@
  * in Apple's typedstream format. This parser extracts the text content.
  */
 
+// Content marker that reliably precedes length-encoded text in typedstream
+// Pattern: SOH (0x01) + '+' (0x2b)
+const STRING_CONTENT_MARKER = Buffer.from([0x01, 0x2b]);
+
 /**
  * Decode a typedstream variable-length integer
  *
@@ -46,6 +50,27 @@ export function decodeTypedstreamLength(
       // Treat unknown markers as single-byte length
       return { length: firstByte, bytesConsumed: 1 };
   }
+}
+
+/**
+ * Extract text using the 0x01 0x2b content marker pattern
+ * This marker reliably precedes length-encoded text in typedstream
+ */
+function extractTextUsingContentMarker(blob: Buffer): string | null {
+  const markerIndex = blob.indexOf(STRING_CONTENT_MARKER);
+  if (markerIndex === -1) return null;
+
+  const pos = markerIndex + STRING_CONTENT_MARKER.length;
+  if (pos >= blob.length) return null;
+
+  const { length, bytesConsumed } = decodeTypedstreamLength(blob, pos);
+
+  if (length <= 0 || length >= 100000 || pos + bytesConsumed + length > blob.length) {
+    return null;
+  }
+
+  const extracted = blob.subarray(pos + bytesConsumed, pos + bytesConsumed + length).toString('utf8');
+  return isPrintableText(extracted) ? extracted : null;
 }
 
 /**
@@ -96,23 +121,21 @@ export function parseAttributedBody(blob: Buffer | null): string {
   }
 
   try {
-    // Strategy 1: Look for NSString marker followed by length-prefixed string
+    // Strategy 1: Use 0x01 0x2b content marker (most reliable)
+    const contentMarkerResult = extractTextUsingContentMarker(blob);
+    if (contentMarkerResult) return contentMarkerResult;
+
+    // Strategy 2: Legacy NSString marker (fallback)
     const nsStringResult = extractTextAfterMarker(blob, Buffer.from('NSString'));
-    if (nsStringResult) {
-      return nsStringResult;
-    }
+    if (nsStringResult) return nsStringResult;
 
-    // Strategy 2: Look for NSMutableString marker
+    // Strategy 3: NSMutableString marker
     const nsMutableResult = extractTextAfterMarker(blob, Buffer.from('NSMutableString'));
-    if (nsMutableResult) {
-      return nsMutableResult;
-    }
+    if (nsMutableResult) return nsMutableResult;
 
-    // Strategy 3: Fallback - try to extract printable text regions
+    // Strategy 4: Printable regions extraction
     const fallbackText = extractPrintableRegions(blob);
-    if (fallbackText.length > 0) {
-      return fallbackText;
-    }
+    if (fallbackText.length > 0) return fallbackText;
 
     return '';
   } catch {

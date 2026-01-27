@@ -150,6 +150,59 @@ describe('decodeTypedstreamLength', () => {
   });
 });
 
+describe('extractTextUsingContentMarker', () => {
+  it('should extract text using 0x01 0x2b marker pattern', () => {
+    const preamble = Buffer.from([0x04, 0x0b, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d]);
+    const marker = Buffer.from([0x01, 0x2b]);
+    const text = 'Hey jack nice to hear from you!';
+    const lengthByte = Buffer.from([text.length]);
+    const textBuffer = Buffer.from(text);
+
+    const blob = Buffer.concat([preamble, marker, lengthByte, textBuffer]);
+
+    const result = parseAttributedBody(blob);
+    expect(result).toBe(text);
+  });
+
+  it('should handle messages over 127 chars with u16 length', () => {
+    const marker = Buffer.from([0x01, 0x2b]);
+    const text = 'A'.repeat(200);
+    const lengthBytes = Buffer.from([0x81, 0xc8, 0x00]); // 200 as u16
+    const textBuffer = Buffer.from(text);
+
+    const blob = Buffer.concat([marker, lengthBytes, textBuffer]);
+
+    const result = parseAttributedBody(blob);
+    expect(result).toBe(text);
+  });
+
+  it('should handle messages over 255 chars with u16 length', () => {
+    const marker = Buffer.from([0x01, 0x2b]);
+    const text = 'B'.repeat(300);
+    const lengthBytes = Buffer.from([0x81, 0x2c, 0x01]); // 300 as u16
+    const textBuffer = Buffer.from(text);
+
+    const blob = Buffer.concat([marker, lengthBytes, textBuffer]);
+
+    const result = parseAttributedBody(blob);
+    expect(result).toBe(text);
+  });
+
+  it('should fall back to NSString strategy when content marker not found', () => {
+    // Blob without 0x01 0x2b marker should fall back to NSString strategy
+    const text = 'This is fallback text that is long enough';
+    const marker = Buffer.from('NSString');
+    const lengthByte = Buffer.from([text.length]);
+    const textBuffer = Buffer.from(text);
+    const padding = Buffer.from([0, 0, 0, 0, 0]);
+
+    const blob = Buffer.concat([padding, marker, padding, lengthByte, textBuffer]);
+
+    const result = parseAttributedBody(blob);
+    expect(result).toBe(text);
+  });
+});
+
 describe('parseAttributedBody with long messages', () => {
   it('should extract text with 255 characters (boundary case)', () => {
     const text = 'A'.repeat(255);
