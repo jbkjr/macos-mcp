@@ -113,7 +113,7 @@ private func formatterWithBaseLocale() -> DateFormatter {
     return formatter
 }
 
-private func normalizedComponents(_ components: inout DateComponents, using calendar: Calendar, timeZone: TimeZone) {
+private func normalizedComponents(_ components: inout DateComponents, using calendar: Calendar, timeZone: TimeZone?) {
     components.calendar = calendar
     components.timeZone = timeZone
     if components.second == nil && components.hour != nil { components.second = 0 }
@@ -189,7 +189,7 @@ private func parseDateComponents(from dateString: String) -> DateComponents? {
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = TimeZone.current
             var components = calendar.dateComponents(componentsSet(for: trimmedInput), from: parsedDate)
-            normalizedComponents(&components, using: calendar, timeZone: TimeZone.current)
+            normalizedComponents(&components, using: calendar, timeZone: nil)
             return components
         }
     }
