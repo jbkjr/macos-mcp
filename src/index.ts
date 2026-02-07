@@ -13,11 +13,16 @@ import { registerNoteTools } from './notes/index.js';
 import { registerMessageTools } from './messages/index.js';
 
 // Create MCP server
-const server = new McpServer({
-  name: 'macos-mcp',
-  version: '1.0.0',
-  description: 'Unified MCP server for macOS Calendar, Reminders, Notes, and Messages',
-});
+const server = new McpServer(
+  {
+    name: 'macos-mcp',
+    version: '1.0.0',
+    description: 'Unified MCP server for macOS Calendar, Reminders, Notes, and Messages',
+  },
+  {
+    instructions: 'When passing dates/times, use local time by default (e.g. "2026-03-20 09:00:00") without timezone offsets. Only include timezone information if the user explicitly specifies one.',
+  },
+);
 
 // Register all tools
 registerCalendarTools(server);

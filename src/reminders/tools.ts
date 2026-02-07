@@ -68,7 +68,7 @@ export const createReminderSchema = z.object({
   targetList: z.string().optional().describe('The list to create the reminder in (defaults to default list)'),
   notes: z.string().optional().describe('Additional notes for the reminder'),
   url: z.string().url().optional().describe('A URL to associate with the reminder'),
-  dueDate: z.string().optional().describe("Due date (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"),
+  dueDate: z.string().optional().describe("Due date in local time by default (format: 'YYYY-MM-DD HH:mm:ss'). Only include a timezone offset if explicitly specified."),
   recurrence: recurrenceRuleSchema.optional().describe('Recurrence rule for repeating reminders'),
   priority: z.enum(priorityOptions).optional().describe('Priority level (none, low, medium, high)'),
 });
@@ -79,7 +79,7 @@ export const updateReminderSchema = z.object({
   targetList: z.string().optional().describe('Move reminder to a different list'),
   notes: z.string().optional().describe('New notes for the reminder'),
   url: z.string().optional().describe('New URL for the reminder (empty string to remove)'),
-  dueDate: z.string().optional().describe("New due date (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601, empty string to remove)"),
+  dueDate: z.string().optional().describe("New due date in local time by default (format: 'YYYY-MM-DD HH:mm:ss', empty string to remove). Only include a timezone offset if explicitly specified."),
   completed: z.boolean().optional().describe('Mark the reminder as completed or not'),
   recurrence: recurrenceRuleSchema.nullable().optional().describe('Recurrence rule (null to remove, object to set/update)'),
   priority: z.enum(priorityOptions).optional().describe('Priority level (none, low, medium, high)'),
