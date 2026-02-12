@@ -819,7 +819,7 @@ class ContactsManager {
             jobTitle: contact.jobTitle.isEmpty ? nil : contact.jobTitle,
             departmentName: contact.departmentName.isEmpty ? nil : contact.departmentName,
             birthday: birthday,
-            note: contact.note.isEmpty ? nil : contact.note,
+            note: contact.isKeyAvailable(CNContactNoteKey) && !contact.note.isEmpty ? contact.note : nil,
             imageAvailable: contact.imageDataAvailable
         )
     }
