@@ -14,7 +14,6 @@ import {
   getMessageSchema,
   searchMessagesSchema,
   sendMessageSchema,
-  resolveContactSchema,
   listMessageAttachmentsSchema,
   getMessageAttachmentSchema,
 } from './tools.js';
@@ -96,21 +95,6 @@ export function registerMessageTools(server: McpServer): void {
         throw new Error(result.error || 'Failed to send message');
       }
       return result;
-    })
-  );
-
-  // Contact tool
-  server.tool(
-    'resolve_contact',
-    'Find a contact by name, phone number, or email address. ' +
-      'Returns matching contacts with their phone numbers and emails. ' +
-      'Requires Contacts permission.',
-    resolveContactSchema.shape,
-    wrapToolHandler(async (params) => {
-      if (!params.name && !params.phone && !params.email) {
-        throw new Error('Must provide name, phone, or email to resolve contact');
-      }
-      return service.resolveContact(params);
     })
   );
 

@@ -104,7 +104,16 @@ const CALENDAR_ACTIONS = new Set([
   'delete-event',
 ]);
 
-const CONTACT_ACTIONS = new Set(['resolve-contact']);
+const CONTACT_ACTIONS = new Set([
+  'resolve-contact',
+  'search-contacts',
+  'get-contact',
+  'list-contacts',
+  'list-contact-groups',
+  'create-contact',
+  'update-contact',
+  'delete-contact',
+]);
 
 const extractAction = (args: string[]): string | undefined => {
   const actionIndex = args.indexOf('--action');

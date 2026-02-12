@@ -42,25 +42,6 @@ export interface MessageAttachment {
   messageId: string;
 }
 
-export interface Contact {
-  id: string;
-  fullName: string;
-  givenName?: string;
-  familyName?: string;
-  phoneNumbers: ContactPhoneNumber[];
-  emailAddresses: ContactEmail[];
-}
-
-export interface ContactPhoneNumber {
-  label?: string;
-  number: string;
-}
-
-export interface ContactEmail {
-  label?: string;
-  email: string;
-}
-
 export interface SendMessageResult {
   success: boolean;
   recipient: string;

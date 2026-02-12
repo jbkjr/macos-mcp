@@ -45,13 +45,6 @@ export const sendMessageSchema = z.object({
   text: z.string().describe('The message text to send'),
 });
 
-// Contact tool
-export const resolveContactSchema = z.object({
-  name: z.string().optional().describe('Search contacts by name'),
-  phone: z.string().optional().describe('Search contacts by phone number'),
-  email: z.string().optional().describe('Search contacts by email address'),
-});
-
 // Attachment tools
 export const listMessageAttachmentsSchema = z.object({
   chatId: z.string().optional().describe('Filter attachments by chat ID'),

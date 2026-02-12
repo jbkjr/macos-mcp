@@ -12,9 +12,14 @@ import type {
   Message,
   MessageAttachment,
   MessageHandle,
-  Contact,
   SendMessageResult,
 } from './types.js';
+
+interface ResolvedContact {
+  fullName: string;
+  phoneNumbers: { number: string }[];
+  emailAddresses: { email: string }[];
+}
 
 const FULL_DISK_ACCESS_ERROR =
   'Cannot open Messages database. Full Disk Access is required.\n\n' +
@@ -403,7 +408,7 @@ export class MessagesService {
     name?: string;
     phone?: string;
     email?: string;
-  }): Promise<Contact[]> {
+  }): Promise<ResolvedContact[]> {
     const args = ['--action', 'resolve-contact'];
 
     if (options.name) {
@@ -417,7 +422,7 @@ export class MessagesService {
     }
 
     interface ContactsResult {
-      contacts: Contact[];
+      contacts: ResolvedContact[];
     }
 
     const result = await executeCli<ContactsResult>(args);

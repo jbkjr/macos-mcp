@@ -47,15 +47,39 @@ struct DeleteListResult: Codable { let title: String; let deleted = true }
 // Contact Models
 struct ContactPhoneJSON: Codable { let label: String?; let number: String }
 struct ContactEmailJSON: Codable { let label: String?; let email: String }
+struct ContactPostalAddressJSON: Codable {
+    let label: String?
+    let street: String?
+    let city: String?
+    let state: String?
+    let postalCode: String?
+    let country: String?
+    let isoCountryCode: String?
+}
+struct ContactURLJSON: Codable { let label: String?; let url: String }
 struct ContactJSON: Codable {
     let id: String
     let fullName: String
     let givenName: String?
     let familyName: String?
+    let middleName: String?
+    let namePrefix: String?
+    let nameSuffix: String?
+    let nickname: String?
     let phoneNumbers: [ContactPhoneJSON]
     let emailAddresses: [ContactEmailJSON]
+    let postalAddresses: [ContactPostalAddressJSON]
+    let urlAddresses: [ContactURLJSON]
+    let organizationName: String?
+    let jobTitle: String?
+    let departmentName: String?
+    let birthday: String?
+    let note: String?
+    let imageAvailable: Bool
 }
 struct ContactSearchResult: Codable { let contacts: [ContactJSON] }
+struct ContactListResult: Codable { let contacts: [ContactJSON]; let totalCount: Int }
+struct ContactGroupJSON: Codable { let id: String; let name: String }
 
 // MARK: - Date Parsing Helper
 private struct ExplicitTimezone {
@@ -707,6 +731,29 @@ class EventKitManager {
 class ContactsManager {
     private let contactStore = CNContactStore()
 
+    private var fullKeysToFetch: [CNKeyDescriptor] {
+        [
+            CNContactIdentifierKey as CNKeyDescriptor,
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactMiddleNameKey as CNKeyDescriptor,
+            CNContactNamePrefixKey as CNKeyDescriptor,
+            CNContactNameSuffixKey as CNKeyDescriptor,
+            CNContactNicknameKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactEmailAddressesKey as CNKeyDescriptor,
+            CNContactPostalAddressesKey as CNKeyDescriptor,
+            CNContactUrlAddressesKey as CNKeyDescriptor,
+            CNContactOrganizationNameKey as CNKeyDescriptor,
+            CNContactJobTitleKey as CNKeyDescriptor,
+            CNContactDepartmentNameKey as CNKeyDescriptor,
+            CNContactBirthdayKey as CNKeyDescriptor,
+            CNContactNoteKey as CNKeyDescriptor,
+            CNContactImageDataAvailableKey as CNKeyDescriptor,
+            CNContactFormatter.descriptorForRequiredKeys(for: .fullName)
+        ]
+    }
+
     func checkAuthorizationStatus() -> CNAuthorizationStatus {
         return CNContactStore.authorizationStatus(for: .contacts)
     }
@@ -715,63 +762,329 @@ class ContactsManager {
         contactStore.requestAccess(for: .contacts, completionHandler: completion)
     }
 
-    func searchContacts(name: String?, phone: String?, email: String?) throws -> [ContactJSON] {
-        let keysToFetch: [CNKeyDescriptor] = [
-            CNContactIdentifierKey as CNKeyDescriptor,
-            CNContactGivenNameKey as CNKeyDescriptor,
-            CNContactFamilyNameKey as CNKeyDescriptor,
-            CNContactPhoneNumbersKey as CNKeyDescriptor,
-            CNContactEmailAddressesKey as CNKeyDescriptor,
-            CNContactFormatter.descriptorForRequiredKeys(for: .fullName)
-        ]
+    private func contactToJSON(_ contact: CNContact) -> ContactJSON {
+        let fullName = CNContactFormatter.string(from: contact, style: .fullName) ?? ""
+        let phones = contact.phoneNumbers.map { phone in
+            ContactPhoneJSON(
+                label: CNLabeledValue<CNPhoneNumber>.localizedString(forLabel: phone.label ?? ""),
+                number: phone.value.stringValue
+            )
+        }
+        let emails = contact.emailAddresses.map { email in
+            ContactEmailJSON(
+                label: CNLabeledValue<NSString>.localizedString(forLabel: email.label ?? ""),
+                email: email.value as String
+            )
+        }
+        let addresses = contact.postalAddresses.map { addr in
+            let value = addr.value
+            return ContactPostalAddressJSON(
+                label: CNLabeledValue<CNPostalAddress>.localizedString(forLabel: addr.label ?? ""),
+                street: value.street.isEmpty ? nil : value.street,
+                city: value.city.isEmpty ? nil : value.city,
+                state: value.state.isEmpty ? nil : value.state,
+                postalCode: value.postalCode.isEmpty ? nil : value.postalCode,
+                country: value.country.isEmpty ? nil : value.country,
+                isoCountryCode: value.isoCountryCode.isEmpty ? nil : value.isoCountryCode
+            )
+        }
+        let urls = contact.urlAddresses.map { url in
+            ContactURLJSON(
+                label: CNLabeledValue<NSString>.localizedString(forLabel: url.label ?? ""),
+                url: url.value as String
+            )
+        }
+        let birthday: String? = {
+            guard let bday = contact.birthday else { return nil }
+            if let year = bday.year {
+                return String(format: "%04d-%02d-%02d", year, bday.month ?? 1, bday.day ?? 1)
+            }
+            return String(format: "--%02d-%02d", bday.month ?? 1, bday.day ?? 1)
+        }()
 
+        return ContactJSON(
+            id: contact.identifier,
+            fullName: fullName,
+            givenName: contact.givenName.isEmpty ? nil : contact.givenName,
+            familyName: contact.familyName.isEmpty ? nil : contact.familyName,
+            middleName: contact.middleName.isEmpty ? nil : contact.middleName,
+            namePrefix: contact.namePrefix.isEmpty ? nil : contact.namePrefix,
+            nameSuffix: contact.nameSuffix.isEmpty ? nil : contact.nameSuffix,
+            nickname: contact.nickname.isEmpty ? nil : contact.nickname,
+            phoneNumbers: phones,
+            emailAddresses: emails,
+            postalAddresses: addresses,
+            urlAddresses: urls,
+            organizationName: contact.organizationName.isEmpty ? nil : contact.organizationName,
+            jobTitle: contact.jobTitle.isEmpty ? nil : contact.jobTitle,
+            departmentName: contact.departmentName.isEmpty ? nil : contact.departmentName,
+            birthday: birthday,
+            note: contact.note.isEmpty ? nil : contact.note,
+            imageAvailable: contact.imageDataAvailable
+        )
+    }
+
+    func searchContacts(name: String?, phone: String?, email: String?) throws -> [ContactJSON] {
         var contacts: [CNContact] = []
 
         if let searchName = name, !searchName.isEmpty {
-            // Search by name
             let predicate = CNContact.predicateForContacts(matchingName: searchName)
-            contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: keysToFetch)
+            contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: fullKeysToFetch)
         } else if let searchPhone = phone, !searchPhone.isEmpty {
-            // Search by phone number
             let normalizedPhone = normalizePhoneNumber(searchPhone)
             let predicate = CNContact.predicateForContacts(matching: CNPhoneNumber(stringValue: normalizedPhone))
-            contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: keysToFetch)
+            contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: fullKeysToFetch)
         } else if let searchEmail = email, !searchEmail.isEmpty {
-            // Search by email
             let predicate = CNContact.predicateForContacts(matchingEmailAddress: searchEmail)
-            contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: keysToFetch)
+            contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: fullKeysToFetch)
         } else {
             throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Must provide --name, --phone, or --email to search contacts."])
         }
 
-        return contacts.map { contact in
-            let fullName = CNContactFormatter.string(from: contact, style: .fullName) ?? ""
-            let phones = contact.phoneNumbers.map { phone in
-                ContactPhoneJSON(
-                    label: CNLabeledValue<CNPhoneNumber>.localizedString(forLabel: phone.label ?? ""),
-                    number: phone.value.stringValue
-                )
+        return contacts.map { contactToJSON($0) }
+    }
+
+    func getContact(id: String) throws -> ContactJSON? {
+        let predicate = CNContact.predicateForContacts(withIdentifiers: [id])
+        let contacts = try contactStore.unifiedContacts(matching: predicate, keysToFetch: fullKeysToFetch)
+        return contacts.first.map { contactToJSON($0) }
+    }
+
+    func listContacts(groupId: String?, limit: Int) throws -> ContactListResult {
+        var allContacts: [CNContact] = []
+        let fetchRequest = CNContactFetchRequest(keysToFetch: fullKeysToFetch)
+        fetchRequest.sortOrder = .familyName
+
+        if let gid = groupId, !gid.isEmpty {
+            fetchRequest.predicate = CNContact.predicateForContactsInGroup(withIdentifier: gid)
+        }
+
+        try contactStore.enumerateContacts(with: fetchRequest) { contact, stop in
+            allContacts.append(contact)
+            // We collect all for totalCount, but only return up to limit
+        }
+
+        let totalCount = allContacts.count
+        let limited = Array(allContacts.prefix(limit))
+        return ContactListResult(
+            contacts: limited.map { contactToJSON($0) },
+            totalCount: totalCount
+        )
+    }
+
+    func listGroups() throws -> [ContactGroupJSON] {
+        let groups = try contactStore.groups(matching: nil)
+        return groups.map { ContactGroupJSON(id: $0.identifier, name: $0.name) }
+    }
+
+    func createContact(
+        givenName: String?, familyName: String?, middleName: String?,
+        namePrefix: String?, nameSuffix: String?, nickname: String?,
+        organizationName: String?, jobTitle: String?, departmentName: String?,
+        phonesJSON: String?, emailsJSON: String?, addressesJSON: String?, urlsJSON: String?,
+        birthday: String?, note: String?
+    ) throws -> ContactJSON {
+        let contact = CNMutableContact()
+
+        if let v = givenName { contact.givenName = v }
+        if let v = familyName { contact.familyName = v }
+        if let v = middleName { contact.middleName = v }
+        if let v = namePrefix { contact.namePrefix = v }
+        if let v = nameSuffix { contact.nameSuffix = v }
+        if let v = nickname { contact.nickname = v }
+        if let v = organizationName { contact.organizationName = v }
+        if let v = jobTitle { contact.jobTitle = v }
+        if let v = departmentName { contact.departmentName = v }
+        if let v = note { contact.note = v }
+
+        if let json = phonesJSON, let data = json.data(using: .utf8),
+           let phones = try? JSONDecoder().decode([[String: String]].self, from: data) {
+            contact.phoneNumbers = phones.map { dict in
+                let label = labelStringToContactLabel(dict["label"])
+                return CNLabeledValue(label: label, value: CNPhoneNumber(stringValue: dict["number"] ?? ""))
             }
-            let emails = contact.emailAddresses.map { email in
-                ContactEmailJSON(
-                    label: CNLabeledValue<NSString>.localizedString(forLabel: email.label ?? ""),
-                    email: email.value as String
-                )
+        }
+
+        if let json = emailsJSON, let data = json.data(using: .utf8),
+           let emails = try? JSONDecoder().decode([[String: String]].self, from: data) {
+            contact.emailAddresses = emails.map { dict in
+                let label = labelStringToContactLabel(dict["label"])
+                return CNLabeledValue(label: label, value: (dict["email"] ?? "") as NSString)
             }
-            return ContactJSON(
-                id: contact.identifier,
-                fullName: fullName,
-                givenName: contact.givenName.isEmpty ? nil : contact.givenName,
-                familyName: contact.familyName.isEmpty ? nil : contact.familyName,
-                phoneNumbers: phones,
-                emailAddresses: emails
-            )
+        }
+
+        if let json = addressesJSON, let data = json.data(using: .utf8),
+           let addrs = try? JSONDecoder().decode([[String: String]].self, from: data) {
+            contact.postalAddresses = addrs.map { dict in
+                let addr = CNMutablePostalAddress()
+                if let v = dict["street"] { addr.street = v }
+                if let v = dict["city"] { addr.city = v }
+                if let v = dict["state"] { addr.state = v }
+                if let v = dict["postalCode"] { addr.postalCode = v }
+                if let v = dict["country"] { addr.country = v }
+                if let v = dict["isoCountryCode"] { addr.isoCountryCode = v }
+                let label = labelStringToContactLabel(dict["label"])
+                return CNLabeledValue(label: label, value: addr)
+            }
+        }
+
+        if let json = urlsJSON, let data = json.data(using: .utf8),
+           let urls = try? JSONDecoder().decode([[String: String]].self, from: data) {
+            contact.urlAddresses = urls.map { dict in
+                let label = labelStringToContactLabel(dict["label"])
+                return CNLabeledValue(label: label, value: (dict["url"] ?? "") as NSString)
+            }
+        }
+
+        if let bdayStr = birthday {
+            contact.birthday = parseBirthdayComponents(bdayStr)
+        }
+
+        let saveRequest = CNSaveRequest()
+        saveRequest.add(contact, toContainerWithIdentifier: nil)
+        try contactStore.execute(saveRequest)
+
+        // Re-fetch to get the assigned identifier
+        guard let saved = try getContact(id: contact.identifier) else {
+            throw NSError(domain: "", code: 500, userInfo: [NSLocalizedDescriptionKey: "Contact created but could not be retrieved."])
+        }
+        return saved
+    }
+
+    func updateContact(
+        id: String,
+        givenName: String?, familyName: String?, middleName: String?,
+        namePrefix: String?, nameSuffix: String?, nickname: String?,
+        organizationName: String?, jobTitle: String?, departmentName: String?,
+        phonesJSON: String?, emailsJSON: String?, addressesJSON: String?, urlsJSON: String?,
+        birthday: String?, note: String?
+    ) throws -> ContactJSON {
+        let predicate = CNContact.predicateForContacts(withIdentifiers: [id])
+        guard let existing = try contactStore.unifiedContacts(matching: predicate, keysToFetch: fullKeysToFetch).first else {
+            throw NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "Contact with ID '\(id)' not found."])
+        }
+        let contact = existing.mutableCopy() as! CNMutableContact
+
+        if let v = givenName { contact.givenName = v }
+        if let v = familyName { contact.familyName = v }
+        if let v = middleName { contact.middleName = v }
+        if let v = namePrefix { contact.namePrefix = v }
+        if let v = nameSuffix { contact.nameSuffix = v }
+        if let v = nickname { contact.nickname = v }
+        if let v = organizationName { contact.organizationName = v }
+        if let v = jobTitle { contact.jobTitle = v }
+        if let v = departmentName { contact.departmentName = v }
+        if let v = note { contact.note = v }
+
+        // Array fields: replace entirely when provided
+        if let json = phonesJSON, let data = json.data(using: .utf8),
+           let phones = try? JSONDecoder().decode([[String: String]].self, from: data) {
+            contact.phoneNumbers = phones.map { dict in
+                let label = labelStringToContactLabel(dict["label"])
+                return CNLabeledValue(label: label, value: CNPhoneNumber(stringValue: dict["number"] ?? ""))
+            }
+        }
+
+        if let json = emailsJSON, let data = json.data(using: .utf8),
+           let emails = try? JSONDecoder().decode([[String: String]].self, from: data) {
+            contact.emailAddresses = emails.map { dict in
+                let label = labelStringToContactLabel(dict["label"])
+                return CNLabeledValue(label: label, value: (dict["email"] ?? "") as NSString)
+            }
+        }
+
+        if let json = addressesJSON, let data = json.data(using: .utf8),
+           let addrs = try? JSONDecoder().decode([[String: String]].self, from: data) {
+            contact.postalAddresses = addrs.map { dict in
+                let addr = CNMutablePostalAddress()
+                if let v = dict["street"] { addr.street = v }
+                if let v = dict["city"] { addr.city = v }
+                if let v = dict["state"] { addr.state = v }
+                if let v = dict["postalCode"] { addr.postalCode = v }
+                if let v = dict["country"] { addr.country = v }
+                if let v = dict["isoCountryCode"] { addr.isoCountryCode = v }
+                let label = labelStringToContactLabel(dict["label"])
+                return CNLabeledValue(label: label, value: addr)
+            }
+        }
+
+        if let json = urlsJSON, let data = json.data(using: .utf8),
+           let urls = try? JSONDecoder().decode([[String: String]].self, from: data) {
+            contact.urlAddresses = urls.map { dict in
+                let label = labelStringToContactLabel(dict["label"])
+                return CNLabeledValue(label: label, value: (dict["url"] ?? "") as NSString)
+            }
+        }
+
+        if let bdayStr = birthday {
+            if bdayStr.isEmpty {
+                contact.birthday = nil
+            } else {
+                contact.birthday = parseBirthdayComponents(bdayStr)
+            }
+        }
+
+        let saveRequest = CNSaveRequest()
+        saveRequest.update(contact)
+        try contactStore.execute(saveRequest)
+
+        return contactToJSON(contact)
+    }
+
+    func deleteContact(id: String) throws {
+        let predicate = CNContact.predicateForContacts(withIdentifiers: [id])
+        guard let existing = try contactStore.unifiedContacts(matching: predicate, keysToFetch: [CNContactIdentifierKey as CNKeyDescriptor]).first else {
+            throw NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "Contact with ID '\(id)' not found."])
+        }
+        let contact = existing.mutableCopy() as! CNMutableContact
+        let saveRequest = CNSaveRequest()
+        saveRequest.delete(contact)
+        try contactStore.execute(saveRequest)
+    }
+
+    // MARK: - Helpers
+
+    private func normalizePhoneNumber(_ phone: String) -> String {
+        return phone.filter { $0.isNumber || $0 == "+" }
+    }
+
+    private func labelStringToContactLabel(_ label: String?) -> String {
+        guard let l = label?.lowercased() else { return CNLabelOther }
+        switch l {
+        case "home": return CNLabelHome
+        case "work": return CNLabelWork
+        case "other": return CNLabelOther
+        case "mobile", "cell": return CNLabelPhoneNumberMobile
+        case "main": return CNLabelPhoneNumberMain
+        case "iphone": return CNLabelPhoneNumberiPhone
+        case "home fax", "homefax": return CNLabelPhoneNumberHomeFax
+        case "work fax", "workfax": return CNLabelPhoneNumberWorkFax
+        case "pager": return CNLabelPhoneNumberPager
+        case "homepage": return CNLabelURLAddressHomePage
+        default: return CNLabelOther
         }
     }
 
-    private func normalizePhoneNumber(_ phone: String) -> String {
-        // Remove common formatting characters, keep + for international
-        return phone.filter { $0.isNumber || $0 == "+" }
+    private func parseBirthdayComponents(_ dateString: String) -> DateComponents? {
+        // Support "--MM-dd" (no year) or "yyyy-MM-dd"
+        let trimmed = dateString.trimmingCharacters(in: .whitespacesAndNewlines)
+        var components = DateComponents()
+
+        if trimmed.hasPrefix("--") {
+            // No year: --MM-dd
+            let parts = trimmed.dropFirst(2).split(separator: "-")
+            guard parts.count == 2, let month = Int(parts[0]), let day = Int(parts[1]) else { return nil }
+            components.month = month
+            components.day = day
+        } else {
+            // Full date: yyyy-MM-dd
+            let parts = trimmed.split(separator: "-")
+            guard parts.count == 3, let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2]) else { return nil }
+            components.year = year
+            components.month = month
+            components.day = day
+        }
+        return components
     }
 }
 
@@ -932,7 +1245,7 @@ func main() {
     let action = parser.get("action") ?? ""
     let calendarActions = Set(["read-calendars", "read-events", "get-event", "create-event", "update-event", "delete-event"])
     let reminderActions = Set(["read-lists", "read-reminders", "get-reminder", "create-reminder", "update-reminder", "delete-reminder", "create-list", "update-list", "delete-list"])
-    let contactActions = Set(["resolve-contact"])
+    let contactActions = Set(["resolve-contact", "search-contacts", "get-contact", "list-contacts", "list-contact-groups", "create-contact", "update-contact", "delete-contact"])
 
     let isCalendarAction = calendarActions.contains(action)
     let isReminderAction = reminderActions.contains(action)
@@ -1043,7 +1356,7 @@ func main() {
                 try outputResult(DeleteListResult(title: name))
 
             // Contact actions
-            case "resolve-contact":
+            case "resolve-contact", "search-contacts":
                 let contacts = try contactsManager.searchContacts(
                     name: parser.get("name"),
                     phone: parser.get("phone"),
@@ -1051,8 +1364,70 @@ func main() {
                 )
                 try outputResult(ContactSearchResult(contacts: contacts))
 
+            case "get-contact":
+                let id = try requireArg("id")
+                guard let contact = try contactsManager.getContact(id: id) else {
+                    throw NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "Contact with ID '\(id)' not found."])
+                }
+                try outputResult(contact)
+
+            case "list-contacts":
+                let limit = Int(parser.get("limit") ?? "200") ?? 200
+                let result = try contactsManager.listContacts(groupId: parser.get("groupId"), limit: limit)
+                try outputResult(result)
+
+            case "list-contact-groups":
+                let groups = try contactsManager.listGroups()
+                try outputResult(groups)
+
+            case "create-contact":
+                let contact = try contactsManager.createContact(
+                    givenName: parser.get("givenName"),
+                    familyName: parser.get("familyName"),
+                    middleName: parser.get("middleName"),
+                    namePrefix: parser.get("namePrefix"),
+                    nameSuffix: parser.get("nameSuffix"),
+                    nickname: parser.get("nickname"),
+                    organizationName: parser.get("organizationName"),
+                    jobTitle: parser.get("jobTitle"),
+                    departmentName: parser.get("departmentName"),
+                    phonesJSON: parser.get("phones"),
+                    emailsJSON: parser.get("emails"),
+                    addressesJSON: parser.get("addresses"),
+                    urlsJSON: parser.get("urls"),
+                    birthday: parser.get("birthday"),
+                    note: parser.get("note")
+                )
+                try outputResult(contact)
+
+            case "update-contact":
+                let contact = try contactsManager.updateContact(
+                    id: try requireArg("id"),
+                    givenName: parser.get("givenName"),
+                    familyName: parser.get("familyName"),
+                    middleName: parser.get("middleName"),
+                    namePrefix: parser.get("namePrefix"),
+                    nameSuffix: parser.get("nameSuffix"),
+                    nickname: parser.get("nickname"),
+                    organizationName: parser.get("organizationName"),
+                    jobTitle: parser.get("jobTitle"),
+                    departmentName: parser.get("departmentName"),
+                    phonesJSON: parser.get("phones"),
+                    emailsJSON: parser.get("emails"),
+                    addressesJSON: parser.get("addresses"),
+                    urlsJSON: parser.get("urls"),
+                    birthday: parser.get("birthday"),
+                    note: parser.get("note")
+                )
+                try outputResult(contact)
+
+            case "delete-contact":
+                let id = try requireArg("id")
+                try contactsManager.deleteContact(id: id)
+                try outputResult(DeleteResult(id: id))
+
             default:
-                throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid or missing --action. Valid actions: read-calendars, read-events, get-event, create-event, update-event, delete-event, read-lists, read-reminders, get-reminder, create-reminder, update-reminder, delete-reminder, create-list, update-list, delete-list, resolve-contact"])
+                throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid or missing --action. Valid actions: read-calendars, read-events, get-event, create-event, update-event, delete-event, read-lists, read-reminders, get-reminder, create-reminder, update-reminder, delete-reminder, create-list, update-list, delete-list, resolve-contact, search-contacts, get-contact, list-contacts, list-contact-groups, create-contact, update-contact, delete-contact"])
             }
         } catch {
             outputError(error.localizedDescription)
