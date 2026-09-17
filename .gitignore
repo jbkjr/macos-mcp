@@ -5,6 +5,7 @@ node_modules/
 build/
 dist/
 bin/macos-mcp-bridge
+bin/MacOSMCPBridge.app/
 
 # Swift build artifacts
 swift/.build/

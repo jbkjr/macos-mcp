@@ -5,6 +5,8 @@
 
 import { execFile, type ExecFileException } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +15,11 @@ const __dirname = path.dirname(__filename);
 
 // Binary name
 const BINARY_NAME = 'macos-mcp-bridge';
+// App bundle wrapper. Preferred over the bare binary: launching it through
+// LaunchServices makes it its own TCC "responsible process", so macOS keys
+// Calendar/Reminders/Contacts consent to its bundle ID instead of to whichever
+// node binary spawned it (a path that changes on every node upgrade).
+const APP_BUNDLE_NAME = 'MacOSMCPBridge.app';
 
 interface CliSuccessResponse<T> {
   status: 'success';
@@ -45,11 +52,67 @@ export class CliPermissionError extends Error {
   }
 }
 
+/**
+ * Launch the .app bundle via LaunchServices (`open -W -n`) and collect its
+ * output through temp files. Direct execFile of the binary inherits the
+ * parent's TCC identity and gets denied without a prompt on macOS 14+.
+ */
+const execViaLaunchServices = async (
+  appPath: string,
+  args: string[]
+): Promise<{ stdout: string; stderr: string }> => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'macos-mcp-bridge-'));
+  const outPath = path.join(tmpDir, 'stdout');
+  const errPath = path.join(tmpDir, 'stderr');
+  try {
+    // `-W` (wait) races with fast-exiting apps: open can fail with
+    // "Unable to block on applications (initial call to kevent() failed)"
+    // after the bridge has already finished. So treat that specific failure
+    // as non-fatal and poll the output file until it holds complete JSON.
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        '/usr/bin/open',
+        ['-W', '-n', '--stdout', outPath, '--stderr', errPath, appPath, '--args', ...args],
+        { maxBuffer: 1024 * 1024 },
+        (error) => {
+          if (error && !/Unable to block on applications/.test(String(error.message))) {
+            reject(error);
+            return;
+          }
+          resolve();
+        }
+      );
+    });
+    const deadline = Date.now() + 15_000;
+    let stdout = '';
+    for (;;) {
+      stdout = existsSync(outPath) ? await readFile(outPath, 'utf8') : '';
+      const trimmed = stdout.trim();
+      if (trimmed.length > 0) {
+        try {
+          JSON.parse(trimmed);
+          break;
+        } catch {
+          // partial write; keep polling
+        }
+      }
+      if (Date.now() > deadline) break;
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    const stderr = existsSync(errPath) ? await readFile(errPath, 'utf8') : '';
+    return { stdout, stderr };
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+};
+
 const execFilePromise = (
   cliPath: string,
   args: string[]
 ): Promise<{ stdout: string; stderr: string }> =>
-  new Promise((resolve, reject) => {
+  cliPath.endsWith('.app')
+    ? execViaLaunchServices(cliPath, args)
+    : new Promise((resolve, reject) => {
     execFile(cliPath, args, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
         const execError = error as ExecFileException & {
@@ -72,6 +135,7 @@ function findBinaryPath(): string {
   // Look in the project's bin directory
   const projectRoot = path.resolve(__dirname, '..', '..');
   const possiblePaths = [
+    path.join(projectRoot, 'bin', APP_BUNDLE_NAME),
     path.join(projectRoot, 'bin', BINARY_NAME),
     path.join(projectRoot, 'build', 'bin', BINARY_NAME),
   ];
