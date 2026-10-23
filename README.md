@@ -5,7 +5,7 @@ Unified MCP server for macOS Calendar, Reminders, and Notes. Provides 24 tools f
 ## Requirements
 
 - macOS 12.0+
-- Node.js 18+
+- Node.js 22.23.4+, 24.22.1+ or 26.12.1+ (the October 2026 security releases)
 - Swift 5.9+ (included with Xcode)
 
 ## Installation
