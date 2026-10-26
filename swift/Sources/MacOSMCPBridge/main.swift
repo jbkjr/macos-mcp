@@ -234,6 +234,28 @@ func parseDate(from dateString: String) -> Date? {
     return calendar.date(from: components)
 }
 
+/// The instant reminder date components refer to; floating components resolve in the current time zone.
+private func resolvedDate(from dateComponents: DateComponents?) -> Date? {
+    guard var components = dateComponents else { return nil }
+    var calendar = components.calendar ?? Calendar(identifier: .gregorian)
+    calendar.timeZone = components.timeZone ?? TimeZone.current
+    components.calendar = calendar
+    return calendar.date(from: components)
+}
+
+/// Shifts date components by `delta` seconds, keeping their granularity and time zone.
+private func shiftedComponents(_ components: DateComponents, by delta: TimeInterval) -> DateComponents? {
+    guard let date = resolvedDate(from: components) else { return nil }
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = components.timeZone ?? TimeZone.current
+    let fields: Set<Calendar.Component> = components.hour == nil
+        ? [.year, .month, .day]
+        : [.year, .month, .day, .hour, .minute, .second]
+    var shifted = calendar.dateComponents(fields, from: date.addingTimeInterval(delta))
+    normalizedComponents(&shifted, using: calendar, timeZone: components.timeZone)
+    return shifted
+}
+
 // MARK: - Date Formatting Helper
 private func formatDueDateWithTimezone(from dateComponents: DateComponents?, timeZoneHint: TimeZone?) -> String? {
     guard var components = dateComponents else {
@@ -615,6 +637,10 @@ class EventKitManager {
             if let parsedComponents = parseDateComponents(from: dateStr) {
                 reminder.dueDateComponents = parsedComponents
                 reminder.timeZone = parsedComponents.timeZone
+                // Like Reminders.app, give a timed reminder an alarm; without one it never notifies.
+                if parsedComponents.hour != nil, let dueDate = resolvedDate(from: parsedComponents) {
+                    reminder.addAlarm(EKAlarm(absoluteDate: dueDate))
+                }
             }
         }
 
@@ -673,12 +699,37 @@ class EventKitManager {
         if let isCompleted = isCompleted { reminder.isCompleted = isCompleted }
         if let listName = listName { reminder.calendar = try findList(named: listName) }
         if let dateStr = dueDateString {
-            if let parsedComponents = parseDateComponents(from: dateStr) {
-                reminder.dueDateComponents = parsedComponents
-                reminder.timeZone = parsedComponents.timeZone
+            // Reminders.app shows and notifies at a reminder's absolute alarm, not its
+            // dueDateComponents, so alarms and the start date must follow the due date.
+            let oldDue = resolvedDate(from: reminder.dueDateComponents)
+            let oldStart = reminder.startDateComponents
+            let parsedComponents = parseDateComponents(from: dateStr)
+            reminder.dueDateComponents = parsedComponents
+            reminder.timeZone = parsedComponents?.timeZone
+
+            if let parsedComponents = parsedComponents, parsedComponents.hour != nil,
+               let newDue = resolvedDate(from: parsedComponents) {
+                if let oldDue = oldDue {
+                    // Shift absolute alarms by the same amount; relative alarms follow on their own.
+                    let delta = newDue.timeIntervalSince(oldDue)
+                    for alarm in reminder.alarms ?? [] {
+                        if let absoluteDate = alarm.absoluteDate {
+                            alarm.absoluteDate = absoluteDate.addingTimeInterval(delta)
+                        }
+                    }
+                    if let oldStart = oldStart {
+                        reminder.startDateComponents = resolvedDate(from: oldStart) == oldDue
+                            ? parsedComponents
+                            : shiftedComponents(oldStart, by: delta)
+                    }
+                }
+                if !(reminder.alarms ?? []).contains(where: { $0.structuredLocation == nil }) {
+                    reminder.addAlarm(EKAlarm(absoluteDate: newDue))
+                }
             } else {
-                reminder.dueDateComponents = nil
-                reminder.timeZone = nil
+                // Cleared or date-only: the app keeps no date alarms, only location ones.
+                reminder.alarms = reminder.alarms?.filter { $0.structuredLocation != nil }
+                if oldStart != nil { reminder.startDateComponents = parsedComponents }
             }
         }
 
