@@ -3,6 +3,7 @@
  * Business logic for calendar operations via Swift CLI
  */
 
+import { parseGuardedCreate, parseGuardedReschedule, parseGuardedUpdate, type GuardedCalendarResult } from './guarded.js';
 import { executeCli } from '../utils/eventkit-cli.js';
 import type { Calendar, CalendarEvent, DeleteResult, EventsReadResult } from './types.js';
 
@@ -24,6 +25,16 @@ function addOptionalArgs(
 }
 
 export class CalendarService {
+  async guardedCreateEvent(input: unknown): Promise<GuardedCalendarResult> {
+    return executeCli(['--action', 'guarded-calendar-create-event', JSON.stringify(parseGuardedCreate(input))]);
+  }
+  async guardedRescheduleEvent(input: unknown): Promise<GuardedCalendarResult> {
+    return executeCli(['--action', 'guarded-calendar-reschedule-event', JSON.stringify(parseGuardedReschedule(input))]);
+  }
+  async guardedUpdateEvent(input: unknown): Promise<GuardedCalendarResult> {
+    return executeCli(['--action', 'guarded-calendar-update-event', JSON.stringify(parseGuardedUpdate(input))]);
+  }
+
   async listCalendars(): Promise<Calendar[]> {
     return executeCli<Calendar[]>(['--action', 'read-calendars']);
   }
