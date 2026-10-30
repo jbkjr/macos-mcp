@@ -7,8 +7,11 @@ let package = Package(
         .macOS(.v12)
     ],
     targets: [
+        .target(name: "GuardedCalendarCore"),
+        .testTarget(name: "GuardedCalendarCoreTests", dependencies: ["GuardedCalendarCore"]),
         .executableTarget(
             name: "MacOSMCPBridge",
+            dependencies: ["GuardedCalendarCore"],
             path: "Sources/MacOSMCPBridge",
             linkerSettings: [
                 // Embed Info.plist into the executable's __TEXT,__info_plist section.

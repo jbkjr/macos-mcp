@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { wrapToolHandler } from '../utils/mcp-helpers.js';
 import { CalendarService } from './service.js';
+import { guardedCalendarCreateEventSchema, guardedCalendarRescheduleEventSchema, guardedCalendarUpdateEventSchema } from './guarded.js';
 import {
   listCalendarsSchema,
   listCalendarEventsSchema,
@@ -25,6 +26,20 @@ export * from './tools.js';
  */
 export function registerCalendarTools(server: McpServer): void {
   const service = new CalendarService();
+
+  // Full strict objects keep the SDK from silently stripping unknown fields.
+  server.registerTool('guarded_calendar_create_event', {
+    description: 'Save one guest-free, non-recurring event on an allowlisted calendar. All-day dates float and end is exclusive.',
+    inputSchema: guardedCalendarCreateEventSchema,
+  }, wrapToolHandler((params) => service.guardedCreateEvent(params)));
+  server.registerTool('guarded_calendar_reschedule_event', {
+    description: 'Replace start, end and time zone of one eligible event, preserving its calendar and all-day kind.',
+    inputSchema: guardedCalendarRescheduleEventSchema,
+  }, wrapToolHandler((params) => service.guardedRescheduleEvent(params)));
+  server.registerTool('guarded_calendar_update_event', {
+    description: 'Replace title, notes or location of one eligible event. Empty notes/location clears; omission preserves.',
+    inputSchema: guardedCalendarUpdateEventSchema,
+  }, wrapToolHandler((params) => service.guardedUpdateEvent(params)));
 
   server.tool(
     'list_calendars',

@@ -4,7 +4,7 @@ import EventKit
 import Contacts
 
 // MARK: - Output Structures & JSON Models
-struct StandardOutput<T: Codable>: Codable { let status = "success"; let result: T }
+struct StandardOutput<T: Encodable>: Encodable { let status = "success"; let result: T }
 struct ErrorOutput: Codable { let status = "error"; let message: String }
 
 // Calendar Models
@@ -1269,6 +1269,13 @@ func handleContactsPermission(
 
 // MARK: - Main
 func main() {
+    let arguments = Array(CommandLine.arguments.dropFirst())
+    // Guarded JSON never enters the legacy flag parser or permission request flow.
+    if arguments.count >= 2, arguments[0] == "--action", arguments[1].hasPrefix("guarded-calendar-") {
+        let result = runGuardedCalendar(arguments: arguments)
+        print(String(decoding: try! JSONEncoder().encode(StandardOutput(result: result)), as: UTF8.self))
+        return
+    }
     let parser = ArgumentParser()
     let manager = EventKitManager()
     let encoder = JSONEncoder()

@@ -72,7 +72,10 @@ const execViaLaunchServices = async (
     await new Promise<void>((resolve, reject) => {
       execFile(
         '/usr/bin/open',
-        ['-W', '-n', '--stdout', outPath, '--stderr', errPath, appPath, '--args', ...args],
+        ['-W', '-n', '--stdout', outPath, '--stderr', errPath,
+          // Forward launch configuration as environment, never bridge argv.
+          ...(args[1]?.startsWith('guarded-calendar-') ? ['--env', `MACOS_MCP_CALENDAR_POLICY=${process.env.MACOS_MCP_CALENDAR_POLICY ?? ''}`] : []),
+          appPath, '--args', ...args],
         { maxBuffer: 1024 * 1024 },
         (error) => {
           if (error && !/Unable to block on applications/.test(String(error.message))) {
@@ -160,6 +163,9 @@ const bufferToString = (data?: string | Buffer | null): string | null => {
 const PERMISSION_KEYWORDS = ['permission', 'authoriz'];
 
 const CALENDAR_ACTIONS = new Set([
+  'guarded-calendar-create-event',
+  'guarded-calendar-reschedule-event',
+  'guarded-calendar-update-event',
   'read-calendars',
   'read-events',
   'get-event',
