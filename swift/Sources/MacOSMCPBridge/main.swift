@@ -8,7 +8,7 @@ struct StandardOutput<T: Encodable>: Encodable { let status = "success"; let res
 struct ErrorOutput: Codable { let status = "error"; let message: String }
 
 // Calendar Models
-struct CalendarJSON: Codable { let id: String, title: String }
+struct CalendarJSON: Codable { let id: String, title: String, sourceId: String, sourceTitle: String }
 struct EventJSON: Codable { let id: String, title: String, calendar: String, startDate: String, endDate: String, notes: String?, location: String?, url: String?, isAllDay: Bool }
 struct EventsReadResult: Codable { let calendars: [CalendarJSON]; let events: [EventJSON] }
 struct DeleteResult: Codable { let id: String; let deleted = true }
@@ -452,7 +452,7 @@ class EventKitManager {
     }
 
     func getCalendars() -> [CalendarJSON] {
-        return eventStore.calendars(for: .event).map { CalendarJSON(id: $0.calendarIdentifier, title: $0.title) }
+        return eventStore.calendars(for: .event).map { CalendarJSON(id: $0.calendarIdentifier, title: $0.title, sourceId: $0.source.sourceIdentifier, sourceTitle: $0.source.title) }
     }
 
     func getEvents(startDate: Date?, endDate: Date?, calendarName: String?, search: String?) throws -> [EventJSON] {
