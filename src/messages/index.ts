@@ -96,7 +96,7 @@ export function registerMessageTools(server: McpServer): void {
   server.registerTool(
     'send_message',
     {
-      description: 'Send an iMessage or SMS. Accepts phone number, email, or contact name. ' +
+      description: 'Send an iMessage or SMS. Accepts phone number, email, or the exact full name of a contact. ' +
       'Requires an existing conversation with the recipient. ' +
       'Requires Automation permission for Messages.app.',
       inputSchema: sendMessageSchema,

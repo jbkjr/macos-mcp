@@ -368,12 +368,12 @@ describe('MessagesService', () => {
       executeCliMock.mockResolvedValue({
         contacts: [
           { id: 'contact-1', fullName: 'John Doe', phoneNumbers: [{ number: '+1234567890' }], emailAddresses: [] },
-          { id: 'contact-2', fullName: 'John Smith', phoneNumbers: [{ number: '+0987654321' }], emailAddresses: [] },
+          { id: 'contact-2', fullName: 'John Doe', phoneNumbers: [{ number: '+0987654321' }], emailAddresses: [] },
         ],
       });
 
       const result = await service.sendMessage({
-        recipient: 'John',
+        recipient: 'John Doe',
         text: 'Hello!',
       });
 

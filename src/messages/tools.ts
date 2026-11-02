@@ -42,7 +42,7 @@ export const sendMessageSchema = strictObject({
   recipient: z
     .string()
     .describe(
-      'Phone number, email, or contact name. For contact names, a single matching contact is required.'
+      'Phone number, email, or contact name. A name must be the exact full name of a single contact, or the send is refused.'
     ),
   text: z.string().describe('The message text to send'),
 });

@@ -442,45 +442,56 @@ export class MessagesService {
   }): Promise<SendMessageResult> {
     let targetIdentifier = options.recipient;
 
-    // If recipient looks like a name (not a phone/email), try to resolve it
+    // A send cannot be undone, so a name must identify one contact exactly. Anything
+    // less, including a failed lookup, refuses rather than guessing at a recipient.
     if (!this.isPhoneOrEmail(options.recipient)) {
+      const refuse = (error: string): SendMessageResult => ({
+        success: false,
+        recipient: options.recipient,
+        error,
+      });
+
+      let contacts: ResolvedContact[];
       try {
-        const contacts = await this.resolveContact({ name: options.recipient });
-        if (contacts.length === 0) {
-          return {
-            success: false,
-            recipient: options.recipient,
-            error: `No contact found with name "${options.recipient}"`,
-          };
-        }
-        if (contacts.length > 1) {
-          const contactList = contacts
-            .map((c) => {
-              const phones = c.phoneNumbers.map((p) => p.number).join(', ');
-              return `${c.fullName}: ${phones}`;
-            })
-            .join('\n');
-          return {
-            success: false,
-            recipient: options.recipient,
-            error: `Multiple contacts found. Please specify the phone number directly:\n${contactList}`,
-          };
-        }
-        // Use the first phone number of the single match
-        if (contacts[0].phoneNumbers.length > 0) {
-          targetIdentifier = contacts[0].phoneNumbers[0].number;
-        } else if (contacts[0].emailAddresses.length > 0) {
-          targetIdentifier = contacts[0].emailAddresses[0].email;
-        } else {
-          return {
-            success: false,
-            recipient: options.recipient,
-            error: `Contact "${options.recipient}" has no phone numbers or email addresses`,
-          };
-        }
+        contacts = await this.resolveContact({ name: options.recipient });
       } catch (error) {
-        // If contact resolution fails, try sending with the original identifier
-        console.error('Contact resolution failed:', error);
+        const reason = error instanceof Error ? error.message : String(error);
+        return refuse(
+          `Could not look up contact "${options.recipient}", so nothing was sent: ${reason}. ` +
+            'Use the phone number or email directly.'
+        );
+      }
+
+      if (contacts.length === 0) {
+        return refuse(`No contact found with name "${options.recipient}"`);
+      }
+
+      const wanted = options.recipient.trim().normalize('NFC');
+      const exact = contacts.filter((c) => c.fullName.normalize('NFC') === wanted);
+      if (exact.length === 0) {
+        return refuse(
+          `No contact is named exactly "${options.recipient}", so nothing was sent. ` +
+            `Close matches: ${contacts.map((c) => c.fullName).join(', ')}. ` +
+            'Use the exact full name, or the phone number or email.'
+        );
+      }
+      if (exact.length > 1) {
+        const contactList = exact
+          .map((c) => {
+            const phones = c.phoneNumbers.map((p) => p.number).join(', ');
+            return `${c.fullName}: ${phones}`;
+          })
+          .join('\n');
+        return refuse(`Multiple contacts found. Please specify the phone number directly:\n${contactList}`);
+      }
+
+      // Use the first phone number of the single match
+      if (exact[0].phoneNumbers.length > 0) {
+        targetIdentifier = exact[0].phoneNumbers[0].number;
+      } else if (exact[0].emailAddresses.length > 0) {
+        targetIdentifier = exact[0].emailAddresses[0].email;
+      } else {
+        return refuse(`Contact "${options.recipient}" has no phone numbers or email addresses`);
       }
     }
 
@@ -634,10 +645,11 @@ export class MessagesService {
   }
 
   private isPhoneOrEmail(str: string): boolean {
-    // Phone: starts with +, or contains mostly digits
-    const phonePattern = /^[+]?\d[\d\s\-().]+$/;
-    // Email: contains @
-    const emailPattern = /@/;
+    // Phone: starts with + or (, or contains mostly digits. Contacts formats numbers
+    // like "(555) 555-0100", which is what the multiple-contacts refusal lists.
+    const phonePattern = /^[+]?[\d(][\d\s\-().]+$/;
+    // Email: one @ with no spaces
+    const emailPattern = /^[^\s@]+@[^\s@]+$/;
 
     return phonePattern.test(str) || emailPattern.test(str);
   }
