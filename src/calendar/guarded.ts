@@ -156,3 +156,28 @@ export interface GuardedCalendarResult {
   previous: Record<string, string | boolean | null>;
   reason?: string;
 }
+
+type GuardedIds = Pick<GuardedCalendarResult, 'event_id' | 'calendar_id'>;
+
+/** Carries nothing from the failure itself: its text can quote the request. */
+export function unverifiedGuardedResult(ids: GuardedIds): GuardedCalendarResult {
+  return {
+    outcome: 'unverified',
+    ...ids,
+    changed_fields: [],
+    previous: {},
+    reason: "The bridge's answer was lost or unreadable, so the save could not be confirmed and the previous values are unavailable. The event may have changed. Inspect it before retrying; never automatically retry an unverified create.",
+  };
+}
+
+const isIdentifier = (value: unknown) => value === null || typeof value === 'string';
+
+export function guardedResultOrUnverified(result: unknown, ids: GuardedIds): GuardedCalendarResult {
+  const r = result as Partial<GuardedCalendarResult> | null;
+  const valid = r !== null && typeof r === 'object'
+    && (r.outcome === 'saved' || r.outcome === 'refused' || r.outcome === 'unverified')
+    && isIdentifier(r.event_id) && isIdentifier(r.calendar_id)
+    && Array.isArray(r.changed_fields)
+    && r.previous !== null && typeof r.previous === 'object' && !Array.isArray(r.previous);
+  return valid ? (r as GuardedCalendarResult) : unverifiedGuardedResult(ids);
+}

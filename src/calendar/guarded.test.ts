@@ -7,7 +7,7 @@ import { CalendarService } from './service.js';
 import { executeCli } from '../utils/eventkit-cli.js';
 import { parseGuardedCreate, parseGuardedReschedule, parseGuardedUpdate, validateGuardedRange } from './guarded.js';
 
-vi.mock('../utils/eventkit-cli.js', () => ({ executeCli: vi.fn() }));
+vi.mock('../utils/eventkit-cli.js', () => ({ executeCli: vi.fn(), BRIDGE_NOT_INSTALLED: 'BRIDGE_NOT_INSTALLED' }));
 const create = { calendar_id: 'cal', title: 'event', start: '2026-11-01T10:00:00-07:00', end: '2026-11-01T11:00:00-07:00', time_zone: 'America/Denver', is_all_day: false };
 
 describe('thin guarded calendar', () => {

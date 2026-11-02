@@ -39,7 +39,10 @@ Response: `{outcome:"saved"|"refused"|"unverified", event_id, calendar_id,
 changed_fields, previous, reason?}`. IDs may be null if unavailable. `saved` means a
 fresh EventKit-store fetch confirmed requested fields and eligibility. `refused`
 means validation/initial eligibility failed; `unverified` means save was attempted
-but threw or could not be confirmed. Do not automatically retry an unverified create.
+but threw or could not be confirmed. The TypeScript layer also answers `unverified`,
+with empty `changed_fields` and `previous`, when the bridge may have launched but its
+answer was lost or unreadable (timeout, empty or malformed output, failed `open`). Do
+not automatically retry an unverified create.
 `changed_fields` lists actual requested changes; `previous` contains their old values
 (null for creates), including date-only all-day dates. The gateway logs this undo
 record like reminder writes. There is no journal, lock, revision token or idempotency

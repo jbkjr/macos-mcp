@@ -131,6 +131,9 @@ const execFilePromise = (
     });
   });
 
+/** Error code when no bridge exists to launch, so nothing can have happened. */
+export const BRIDGE_NOT_INSTALLED = 'BRIDGE_NOT_INSTALLED';
+
 /**
  * Find the CLI binary path
  */
@@ -149,8 +152,11 @@ function findBinaryPath(): string {
     }
   }
 
-  throw new Error(
-    `EventKit CLI binary not found. Please run 'npm run build:swift' first. Searched: ${possiblePaths.join(', ')}`
+  throw Object.assign(
+    new Error(
+      `EventKit CLI binary not found. Please run 'npm run build:swift' first. Searched: ${possiblePaths.join(', ')}`
+    ),
+    { code: BRIDGE_NOT_INSTALLED }
   );
 }
 
