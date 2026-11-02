@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Compile the bridge and run only the Foundation/fake-store core tests. Never run
+# Compile the bridge and run only the pure core tests (guarded calendar and bridge helpers). Never run
 # the EventKit executable, request TCC permission, sign, or install an app.
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 SWIFT_DIR="$PROJECT_DIR/swift"
@@ -17,4 +17,4 @@ exec swift test --disable-sandbox \
   --config-path "$SWIFT_DIR/.build/config" \
   --security-path "$SWIFT_DIR/.build/security" \
   -Xswiftc -module-cache-path -Xswiftc "$CLANG_MODULE_CACHE_PATH" \
-  --filter GuardedCalendarCoreTests
+  --filter 'GuardedCalendarCoreTests|BridgeCoreTests'

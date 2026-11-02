@@ -9,9 +9,11 @@ let package = Package(
     targets: [
         .target(name: "GuardedCalendarCore"),
         .testTarget(name: "GuardedCalendarCoreTests", dependencies: ["GuardedCalendarCore"]),
+        .target(name: "BridgeCore"),
+        .testTarget(name: "BridgeCoreTests", dependencies: ["BridgeCore"]),
         .executableTarget(
             name: "MacOSMCPBridge",
-            dependencies: ["GuardedCalendarCore"],
+            dependencies: ["GuardedCalendarCore", "BridgeCore"],
             path: "Sources/MacOSMCPBridge",
             linkerSettings: [
                 // Embed Info.plist into the executable's __TEXT,__info_plist section.
