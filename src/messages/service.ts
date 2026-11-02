@@ -5,7 +5,7 @@
 
 import { getDatabase, macosTimestampToISO, isoToMacosTimestamp } from './database.js';
 import { getMessageText } from './parser.js';
-import { runAppleScript, escapeForAppleScript } from '../utils/applescript.js';
+import { runAppleScriptWithArgs } from '../utils/applescript.js';
 import { executeCli } from '../utils/eventkit-cli.js';
 import type {
   MessageChat,
@@ -484,19 +484,19 @@ export class MessagesService {
       }
     }
 
-    const escapedText = escapeForAppleScript(options.text);
-    const escapedRecipient = escapeForAppleScript(targetIdentifier);
-
-    // AppleScript to send a message via Messages.app
+    // AppleScript to send a message via Messages.app. Recipient and text travel as
+    // arguments, so blank lines and indentation reach Messages exactly as given.
     const script = `
-      tell application "Messages"
-        set targetService to id of 1st account whose service type = iMessage
-        set targetBuddy to participant "${escapedRecipient}" of account id targetService
-        send "${escapedText}" to targetBuddy
-      end tell
+      on run argv
+        tell application "Messages"
+          set targetService to id of 1st account whose service type = iMessage
+          set targetBuddy to participant (item 1 of argv) of account id targetService
+          send (item 2 of argv) to targetBuddy
+        end tell
+      end run
     `;
 
-    const result = runAppleScript(script);
+    const result = runAppleScriptWithArgs(script, [targetIdentifier, options.text]);
 
     if (result.success) {
       return {

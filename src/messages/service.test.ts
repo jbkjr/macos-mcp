@@ -22,6 +22,7 @@ vi.mock('./parser.js', async () => {
 // Mock the applescript module
 vi.mock('../utils/applescript.js', () => ({
   runAppleScript: vi.fn(),
+  runAppleScriptWithArgs: vi.fn(),
   escapeForAppleScript: vi.fn((str) => str),
 }));
 
@@ -60,7 +61,7 @@ describe('MessagesService', () => {
     getDatabaseMock.mockReturnValue(mockDb);
 
     const asModule = await import('../utils/applescript.js');
-    runAppleScriptMock = asModule.runAppleScript;
+    runAppleScriptMock = asModule.runAppleScriptWithArgs;
 
     const cliModule = await import('../utils/eventkit-cli.js');
     executeCliMock = cliModule.executeCli;

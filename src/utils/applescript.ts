@@ -3,7 +3,7 @@
  * Executes AppleScript commands for Notes integration
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 
 export interface AppleScriptResult {
   success: boolean;
@@ -61,6 +61,32 @@ export function runAppleScript(script: string): AppleScriptResult {
           ? error.message
           : 'Unknown error occurred while executing AppleScript',
     };
+  }
+}
+
+/**
+ * Runs a script whose `on run argv` handler receives `args` as data. Values are
+ * never spliced into script text, so they arrive byte for byte. Use this for
+ * anything where whitespace matters: runAppleScript's line splitting trims it.
+ * @param script - AppleScript source with an `on run argv` handler
+ * @param args - Values for argv
+ * @returns Object containing success status and output/error
+ */
+export function runAppleScriptWithArgs(script: string, args: string[]): AppleScriptResult {
+  try {
+    const output = execFileSync('/usr/bin/osascript', ['-e', script, '--', ...args], {
+      encoding: 'utf8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { success: true, output: output.replace(/\n$/, '') };
+  } catch (error) {
+    // error.message holds the command line, and so the values: report stderr only.
+    const stderr = (error as { stderr?: string }).stderr?.trim();
+    const killed = (error as { signal?: string }).signal ? 'AppleScript timed out' : undefined;
+    const message = stderr || killed || 'AppleScript execution failed';
+    console.error('AppleScript execution failed:', message);
+    return { success: false, output: '', error: message };
   }
 }
 
