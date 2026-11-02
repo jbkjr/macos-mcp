@@ -10,6 +10,29 @@ import type { Note, NoteFolder, NoteSearchResult, DeleteResult } from './types.j
 const ICLOUD_ACCOUNT = 'iCloud';
 
 /**
+ * osascript prints records and lists as comma-separated text that cannot be told
+ * apart from a comma in a title, so reads emit control characters instead.
+ */
+const FIELD_SEPARATOR = '\x1f';
+const RECORD_SEPARATOR = '\x1e';
+const DECLARE_SEPARATORS = `
+  set fieldSep to character id ${FIELD_SEPARATOR.charCodeAt(0)}
+  set recordSep to character id ${RECORD_SEPARATOR.charCodeAt(0)}
+`;
+
+const JOIN_MATCHES = `
+  set AppleScript's text item delimiters to recordSep
+  return matchingNotes as text
+`;
+
+function parseRecords(output: string): string[][] {
+  return output
+    .split(RECORD_SEPARATOR)
+    .filter(Boolean)
+    .map((record) => record.split(FIELD_SEPARATOR));
+}
+
+/**
  * Format content for AppleScript compatibility
  * Converts markdown to HTML and escapes for AppleScript
  */
@@ -117,33 +140,34 @@ export class NotesService {
   async listNotes(options?: { folder?: string; limit?: number }): Promise<Note[]> {
     const limit = options?.limit || 100;
     const innerScript = `
-      set noteList to {}
+      set noteList to ""
       set noteCount to 0
       repeat with n in notes
         if noteCount < ${limit} then
-          set end of noteList to {id:(id of n), title:(name of n)}
+          set noteList to noteList & (id of n) & fieldSep & (name of n) & recordSep
           set noteCount to noteCount + 1
         end if
       end repeat
       return noteList
     `;
-    const script = buildNotesScript(options?.folder, innerScript);
+    const script = DECLARE_SEPARATORS + buildNotesScript(options?.folder, innerScript);
     const output = executeScript(script, 'Failed to list notes');
-    return this.parseNoteList(output);
+    return parseRecords(output).map(([id, title]) => ({ id, title }));
   }
 
   async getNote(title: string, folder?: string): Promise<Note> {
     const escapedTitle = escapeForAppleScript(title);
     const innerScript = `
       set theNote to note "${escapedTitle}"
-      return {id:(id of theNote), title:(name of theNote), body:(body of theNote)}
+      return (id of theNote) & fieldSep & (body of theNote)
     `;
-    const script = buildNotesScript(folder, innerScript);
+    const script = DECLARE_SEPARATORS + buildNotesScript(folder, innerScript);
     const output = executeScript(script, 'Failed to get note');
+    const separator = output.indexOf(FIELD_SEPARATOR);
     return {
-      id: this.extractValue(output, 'id') || '',
+      id: output.slice(0, separator),
       title: title,
-      content: this.extractBody(output),
+      content: output.slice(separator + 1),
       folder: folder,
     };
   }
@@ -216,21 +240,19 @@ export class NotesService {
     // If no folder specified, search all notes in account
     if (!folder) {
       const script = `
+        ${DECLARE_SEPARATORS}
+        set matchingNotes to {}
         tell application "Notes"
           tell account "${ICLOUD_ACCOUNT}"
-            set matchingNotes to {}
             repeat with n in (notes whose name contains "${escapedQuery}")
               set end of matchingNotes to name of n
             end repeat
-            return matchingNotes
           end tell
         end tell
+        ${JOIN_MATCHES}
       `;
       const output = executeScript(script, 'Failed to search notes');
-      return output
-        .split(',')
-        .filter(Boolean)
-        .map((title) => ({ title: title.trim() }));
+      return parseRecords(output).map(([title]) => ({ title }));
     }
 
     // If folder specified, search recursively including subfolders
@@ -249,18 +271,17 @@ export class NotesService {
         end tell
       end searchFolder
 
+      ${DECLARE_SEPARATORS}
       tell application "Notes"
         tell account "${ICLOUD_ACCOUNT}"
           set targetFolder to folder "${escapedFolder}"
-          return my searchFolder(targetFolder, "${escapedQuery}")
+          set matchingNotes to my searchFolder(targetFolder, "${escapedQuery}")
         end tell
       end tell
+      ${JOIN_MATCHES}
     `;
     const output = executeScript(script, 'Failed to search notes');
-    return output
-      .split(',')
-      .filter(Boolean)
-      .map((title) => ({ title: title.trim() }));
+    return parseRecords(output).map(([title]) => ({ title }));
   }
 
   private parseKeyValuePairs<T>(
@@ -288,21 +309,8 @@ export class NotesService {
     }));
   }
 
-  private parseNoteList(output: string): Note[] {
-    // AppleScript returns flat format: id:xxx, title:yyy, id:aaa, title:bbb
-    return this.parseKeyValuePairs(output, /id:([^,]+),\s*title:([^,]+?)(?=,\s*id:|$)/g, (match) => ({
-      id: this.cleanValue(match[1]),
-      title: this.cleanValue(match[2]),
-    }));
-  }
-
   private extractValue(output: string, key: string): string | null {
     const match = output.match(new RegExp(`${key}:([^,}]+)`));
     return match ? this.cleanValue(match[1]) : null;
-  }
-
-  private extractBody(output: string): string {
-    const match = output.match(/body:(.+?)\}?\s*$/s);
-    return match ? this.cleanValue(match[1]).replace(/\}$/, '') : '';
   }
 }

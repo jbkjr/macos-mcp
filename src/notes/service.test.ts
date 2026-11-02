@@ -116,7 +116,7 @@ describe('NotesService', () => {
     it('should return list of notes', async () => {
       runAppleScriptMock.mockReturnValue({
         success: true,
-        output: 'id:note-1, title:Note 1, id:note-2, title:Note 2',
+        output: 'note-1\x1fNote 1\x1enote-2\x1fNote 2\x1e',
       });
 
       const result = await service.listNotes();
@@ -128,7 +128,7 @@ describe('NotesService', () => {
     it('should filter by folder', async () => {
       runAppleScriptMock.mockReturnValue({
         success: true,
-        output: 'id:note-1, title:Note 1',
+        output: 'note-1\x1fNote 1\x1e',
       });
 
       await service.listNotes({ folder: 'Work' });
@@ -154,7 +154,7 @@ describe('NotesService', () => {
     it('should return note content', async () => {
       runAppleScriptMock.mockReturnValue({
         success: true,
-        output: '{id:"note-1", title:"Test Note", body:"Content here"}',
+        output: 'note-1\x1fContent here',
       });
 
       const result = await service.getNote('Test Note');
@@ -166,7 +166,7 @@ describe('NotesService', () => {
     it('should get note from specific folder', async () => {
       runAppleScriptMock.mockReturnValue({
         success: true,
-        output: '{id:"note-1", title:"Note", body:"Content"}',
+        output: 'note-1\x1fContent',
       });
 
       await service.getNote('Note', 'Work');
@@ -289,7 +289,7 @@ describe('NotesService', () => {
     it('should return matching notes', async () => {
       runAppleScriptMock.mockReturnValue({
         success: true,
-        output: 'Note 1, Note 2, Note 3',
+        output: 'Note 1\x1eNote 2\x1eNote 3',
       });
 
       const result = await service.searchNotes('test');
