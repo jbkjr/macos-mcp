@@ -136,6 +136,17 @@ describe('runAppleScriptWithArgs', () => {
     expect(result).toEqual({ success: true, output: `[${value}]` });
   });
 
+  it('flags a killed script as timed out, allowing time for an Automation prompt', async () => {
+    const childProcessMock = await import('node:child_process');
+    vi.mocked(childProcessMock.execFileSync).mockImplementation(() => {
+      throw Object.assign(new Error('spawnSync /usr/bin/osascript ETIMEDOUT'), { signal: 'SIGTERM', stderr: '' });
+    });
+    const { runAppleScriptWithArgs } = await import('./applescript.js');
+    expect(runAppleScriptWithArgs(ECHO, ['x'])).toMatchObject({ success: false, timedOut: true });
+    const options = vi.mocked(childProcessMock.execFileSync).mock.calls[0][2] as { timeout: number };
+    expect(options.timeout).toBeGreaterThanOrEqual(120_000);
+  });
+
   it.runIf(process.platform === 'darwin')('reports only the script error, never the arguments', async () => {
     const { runAppleScriptWithArgs } = await import('./applescript.js');
     const result = runAppleScriptWithArgs('on run argv\nerror "boom"\nend run', ['private text']);

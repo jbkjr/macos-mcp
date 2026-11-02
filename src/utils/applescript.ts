@@ -9,6 +9,8 @@ export interface AppleScriptResult {
   success: boolean;
   output: string;
   error?: string;
+  /** The script was killed at the time limit, so whatever it was doing may have happened. */
+  timedOut?: boolean;
 }
 
 /**
@@ -76,17 +78,18 @@ export function runAppleScriptWithArgs(script: string, args: string[]): AppleScr
   try {
     const output = execFileSync('/usr/bin/osascript', ['-e', script, '--', ...args], {
       encoding: 'utf8',
-      timeout: 30000,
+      // Long enough for someone to answer an Automation prompt.
+      timeout: 120000,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     return { success: true, output: output.replace(/\n$/, '') };
   } catch (error) {
     // error.message holds the command line, and so the values: report stderr only.
     const stderr = (error as { stderr?: string }).stderr?.trim();
-    const killed = (error as { signal?: string }).signal ? 'AppleScript timed out' : undefined;
-    const message = stderr || killed || 'AppleScript execution failed';
+    const timedOut = Boolean((error as { signal?: string }).signal);
+    const message = stderr || (timedOut ? 'AppleScript timed out' : 'AppleScript execution failed');
     console.error('AppleScript execution failed:', message);
-    return { success: false, output: '', error: message };
+    return { success: false, output: '', error: message, ...(timedOut ? { timedOut } : {}) };
   }
 }
 

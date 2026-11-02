@@ -485,14 +485,21 @@ export class MessagesService {
         return refuse(`Multiple contacts found. Please specify the phone number directly:\n${contactList}`);
       }
 
-      // Use the first phone number of the single match
-      if (exact[0].phoneNumbers.length > 0) {
-        targetIdentifier = exact[0].phoneNumbers[0].number;
-      } else if (exact[0].emailAddresses.length > 0) {
-        targetIdentifier = exact[0].emailAddresses[0].email;
-      } else {
+      const addresses = [
+        ...exact[0].phoneNumbers.map((p) => p.number),
+        ...exact[0].emailAddresses.map((e) => e.email),
+      ];
+      if (addresses.length === 0) {
         return refuse(`Contact "${options.recipient}" has no phone numbers or email addresses`);
       }
+      // An old first number could get the text, so the caller has to choose.
+      if (addresses.length > 1) {
+        return refuse(
+          `Contact "${options.recipient}" has several addresses, so nothing was sent. ` +
+            `Pass one directly: ${addresses.join(', ')}.`
+        );
+      }
+      targetIdentifier = addresses[0];
     }
 
     // AppleScript to send a message via Messages.app. Recipient and text travel as
@@ -514,6 +521,16 @@ export class MessagesService {
         success: true,
         recipient: targetIdentifier,
         message: options.text,
+      };
+    }
+
+    if (result.timedOut) {
+      return {
+        success: false,
+        recipient: targetIdentifier,
+        error:
+          `Timed out waiting for Messages; the message may have been sent to ${targetIdentifier}. ` +
+          'Check the conversation (list_messages) before any retry; do not retry blindly.',
       };
     }
 

@@ -41,8 +41,16 @@ describe('send_message', () => {
     expect(JSON.parse(text(result)).message).toBe(body);
   });
 
+  it('says a send that hit the time limit may have gone and should not be retried blindly', async () => {
+    vi.mocked(runAppleScriptWithArgs).mockReturnValueOnce({ success: false, output: '', error: 'AppleScript timed out', timedOut: true });
+    const result = await client.callTool({ name: 'send_message', arguments: { recipient: NUMBER, text: 'hi' } });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain('may have been sent');
+    expect(text(result)).toContain('retry');
+  });
+
   describe('recipient by name', () => {
-    const doe = { fullName: 'John Doe', phoneNumbers: [{ number: NUMBER }, { number: '+15555550101' }], emailAddresses: [] };
+    const doe = { fullName: 'John Doe', phoneNumbers: [{ number: NUMBER }], emailAddresses: [] };
     const send = (recipient: string) => client.callTool({ name: 'send_message', arguments: { recipient, text: 'hi' } });
     const expectRefused = (result: Awaited<ReturnType<typeof send>>, message: string) => {
       expect(result.isError).toBe(true);
@@ -61,6 +69,23 @@ describe('send_message', () => {
     it.each(['John', 'Doe', 'john doe', 'John  Doe', 'Jon Doe'])('refuses %j when the only fuzzy hit is not an exact match', async (name) => {
       vi.mocked(executeCli).mockResolvedValue({ contacts: [doe] });
       expectRefused(await send(name), 'John Doe');
+    });
+
+    it.each([
+      ['two numbers', { phoneNumbers: [{ number: NUMBER }, { number: '+15555550101' }], emailAddresses: [] }, [NUMBER, '+15555550101']],
+      ['a number and an email', { phoneNumbers: [{ number: NUMBER }], emailAddresses: [{ email: 'john@example.com' }] }, [NUMBER, 'john@example.com']],
+      ['two emails', { phoneNumbers: [], emailAddresses: [{ email: 'john@example.com' }, { email: 'jd@example.com' }] }, ['john@example.com', 'jd@example.com']],
+    ])('refuses an exact match with %s, listing them', async (_label, addresses, listed) => {
+      vi.mocked(executeCli).mockResolvedValue({ contacts: [{ ...doe, ...addresses }] });
+      const result = await send('John Doe');
+      expectRefused(result, 'nothing was sent');
+      for (const address of listed) expect(text(result)).toContain(address);
+    });
+
+    it('sends to the sole email of an exact match', async () => {
+      vi.mocked(executeCli).mockResolvedValue({ contacts: [{ ...doe, phoneNumbers: [], emailAddresses: [{ email: 'john@example.com' }] }] });
+      expect((await send('John Doe')).isError).toBeFalsy();
+      expect(vi.mocked(runAppleScriptWithArgs).mock.calls[0][1]).toEqual(['john@example.com', 'hi']);
     });
 
     it('refuses several exact matches, listing them', async () => {
