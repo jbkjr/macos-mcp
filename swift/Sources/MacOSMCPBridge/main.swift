@@ -418,7 +418,7 @@ class EventKitManager {
         let semaphore = DispatchSemaphore(value: 0)
         var fetchedReminders: [EKReminder]?
         eventStore.fetchReminders(matching: predicate) { reminders in fetchedReminders = reminders; semaphore.signal() }
-        semaphore.wait()
+        try waitForCallback(semaphore, seconds: remindersFetchTimeoutSeconds, waitingFor: "Reminders to answer")
 
         guard let reminders = fetchedReminders else { return [] }
 
@@ -1094,8 +1094,19 @@ func handleContactsPermission(
 // MARK: - Main
 func main() {
     let arguments = Array(CommandLine.arguments.dropFirst())
+    let isGuarded = arguments.count >= 2 && arguments[0] == "--action" && arguments[1].hasPrefix("guarded-calendar-")
+    // Nothing below may run forever: a hung EventKit call, or a prompt nobody answers,
+    // ends here. A guarded write says nothing, which the server reports as unverified,
+    // because a save may already have happened.
+    startWatchdog(after: bridgeWatchdogSeconds) {
+        if !isGuarded, let data = try? JSONEncoder().encode(ErrorOutput(message: "Timed out after \(Int(bridgeWatchdogSeconds)) s waiting for macOS. If a permission prompt is open, answer it and try again.")),
+           let json = String(data: data, encoding: .utf8) {
+            print(json)
+        }
+        exit(1)
+    }
     // Guarded JSON never enters the legacy flag parser or permission request flow.
-    if arguments.count >= 2, arguments[0] == "--action", arguments[1].hasPrefix("guarded-calendar-") {
+    if isGuarded {
         let result = runGuardedCalendar(arguments: arguments)
         print(String(decoding: try! JSONEncoder().encode(StandardOutput(result: result)), as: UTF8.self))
         return

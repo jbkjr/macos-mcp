@@ -34,6 +34,14 @@ interface CliErrorResponse {
 type CliResponse<T> = CliSuccessResponse<T> | CliErrorResponse;
 
 /**
+ * Whole-call budget, long enough for someone to answer a TCC prompt. The bridge's
+ * own watchdog (bridgeWatchdogSeconds, 150 s) fires first when the bridge has one.
+ */
+const BRIDGE_TIMEOUT_MS = 180_000;
+
+const timedOut = () => new Error(`Bridge timed out after ${BRIDGE_TIMEOUT_MS / 1000} s`);
+
+/**
  * Permission domains for macOS
  */
 export type PermissionDomain = 'calendars' | 'reminders' | 'contacts';
@@ -69,6 +77,8 @@ const execViaLaunchServices = async (
     // "Unable to block on applications (initial call to kevent() failed)"
     // after the bridge has already finished. So treat that specific failure
     // as non-fatal and poll the output file until it holds complete JSON.
+    const started = Date.now();
+    let raced = false;
     await new Promise<void>((resolve, reject) => {
       execFile(
         '/usr/bin/open',
@@ -76,17 +86,23 @@ const execViaLaunchServices = async (
           // Forward launch configuration as environment, never bridge argv.
           ...(args[1]?.startsWith('guarded-calendar-') ? ['--env', `MACOS_MCP_CALENDAR_POLICY=${process.env.MACOS_MCP_CALENDAR_POLICY ?? ''}`] : []),
           appPath, '--args', ...args],
-        { maxBuffer: 1024 * 1024 },
+        { maxBuffer: 1024 * 1024, timeout: BRIDGE_TIMEOUT_MS },
         (error) => {
+          if (error?.killed) {
+            reject(timedOut());
+            return;
+          }
           if (error && !/Unable to block on applications/.test(String(error.message))) {
             reject(error);
             return;
           }
+          raced = error !== null;
           resolve();
         }
       );
     });
-    const deadline = Date.now() + 15_000;
+    // After a race the bridge may still be running, perhaps behind a TCC prompt.
+    const deadline = raced ? started + BRIDGE_TIMEOUT_MS : Date.now() + 15_000;
     let stdout = '';
     for (;;) {
       stdout = existsSync(outPath) ? await readFile(outPath, 'utf8') : '';
@@ -116,7 +132,11 @@ const execFilePromise = (
   cliPath.endsWith('.app')
     ? execViaLaunchServices(cliPath, args)
     : new Promise((resolve, reject) => {
-    execFile(cliPath, args, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile(cliPath, args, { maxBuffer: 50 * 1024 * 1024, timeout: BRIDGE_TIMEOUT_MS }, (error, stdout, stderr) => {
+      if (error?.killed) {
+        reject(timedOut());
+        return;
+      }
       if (error) {
         const execError = error as ExecFileException & {
           stdout?: string | Buffer;
