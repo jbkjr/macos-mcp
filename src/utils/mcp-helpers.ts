@@ -13,6 +13,11 @@ interface ToolResult {
   isError?: boolean;
 }
 
+/** Bridge not-found errors all read "... ID '<id>' not found". */
+const ID_NOT_FOUND = /\bID '.*' not found/;
+const FULL_ID_HINT =
+  ' IDs must be given in full, exactly as a list or get tool returned them (a full UUID for reminders, not a prefix); prefixes are not matched.';
+
 /**
  * Wraps an async handler function with standardized JSON output and error handling.
  * Reduces boilerplate in tool registrations.
@@ -27,7 +32,8 @@ export function wrapToolHandler<T, R>(
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      let message = error instanceof Error ? error.message : String(error);
+      if (ID_NOT_FOUND.test(message)) message += FULL_ID_HINT;
       return {
         content: [{ type: 'text', text: `Error: ${message}` }],
         isError: true,

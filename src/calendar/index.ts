@@ -41,48 +41,60 @@ export function registerCalendarTools(server: McpServer): void {
     inputSchema: guardedCalendarUpdateEventSchema,
   }, wrapToolHandler((params) => service.guardedUpdateEvent(params)));
 
-  server.tool(
+  server.registerTool(
     'list_calendars',
-    'List all available calendars',
-    listCalendarsSchema.shape,
+    {
+      description: 'List all available calendars',
+      inputSchema: listCalendarsSchema,
+    },
     wrapToolHandler(async () => service.listCalendars())
   );
 
-  server.tool(
+  server.registerTool(
     'list_calendar_events',
-    'List calendar events with optional filters (calendar, search, date range)',
-    listCalendarEventsSchema.shape,
+    {
+      description: 'List calendar events with optional filters (calendar, search, date range)',
+      inputSchema: listCalendarEventsSchema,
+    },
     wrapToolHandler(async (params) => service.listEvents(params))
   );
 
-  server.tool(
+  server.registerTool(
     'get_calendar_event',
-    'Get a single calendar event by ID',
-    getCalendarEventSchema.shape,
+    {
+      description: 'Get a single calendar event by ID',
+      inputSchema: getCalendarEventSchema,
+    },
     wrapToolHandler(async (params) => service.getEvent(params.id))
   );
 
-  server.tool(
+  server.registerTool(
     'create_calendar_event',
-    'Create a new calendar event',
-    createCalendarEventSchema.shape,
+    {
+      description: 'Create a new calendar event',
+      inputSchema: createCalendarEventSchema,
+    },
     wrapToolHandler(async (params) => service.createEvent(params))
   );
 
-  server.tool(
+  server.registerTool(
     'update_calendar_event',
-    'Update an existing calendar event',
-    updateCalendarEventSchema.shape,
+    {
+      description: 'Update an existing calendar event',
+      inputSchema: updateCalendarEventSchema,
+    },
     wrapToolHandler(async (params) => {
       const { id, ...updates } = params;
       return service.updateEvent(id, updates);
     })
   );
 
-  server.tool(
+  server.registerTool(
     'delete_calendar_event',
-    'Delete a calendar event by ID',
-    deleteCalendarEventSchema.shape,
+    {
+      description: 'Delete a calendar event by ID',
+      inputSchema: deleteCalendarEventSchema,
+    },
     wrapToolHandler(async (params) => service.deleteEvent(params.id))
   );
 }
