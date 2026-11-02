@@ -5,17 +5,19 @@
 
 import { z } from 'zod';
 
-const phoneSchema = z.object({
+import { strictObject } from '../utils/strict.js';
+
+const phoneSchema = strictObject({
   label: z.string().optional().describe('Label (e.g. "mobile", "home", "work")'),
   number: z.string().describe('Phone number'),
 });
 
-const emailSchema = z.object({
+const emailSchema = strictObject({
   label: z.string().optional().describe('Label (e.g. "home", "work")'),
   email: z.string().describe('Email address'),
 });
 
-const postalAddressSchema = z.object({
+const postalAddressSchema = strictObject({
   label: z.string().optional().describe('Label (e.g. "home", "work")'),
   street: z.string().optional(),
   city: z.string().optional(),
@@ -25,29 +27,29 @@ const postalAddressSchema = z.object({
   isoCountryCode: z.string().optional(),
 });
 
-const urlSchema = z.object({
+const urlSchema = strictObject({
   label: z.string().optional().describe('Label (e.g. "homepage", "home", "work")'),
   url: z.string().describe('URL'),
 });
 
-export const searchContactsSchema = z.object({
+export const searchContactsSchema = strictObject({
   name: z.string().optional().describe('Search contacts by name'),
   phone: z.string().optional().describe('Search contacts by phone number'),
   email: z.string().optional().describe('Search contacts by email address'),
 });
 
-export const getContactSchema = z.object({
+export const getContactSchema = strictObject({
   id: z.string().describe('The unique identifier of the contact'),
 });
 
-export const listContactsSchema = z.object({
+export const listContactsSchema = strictObject({
   groupId: z.string().optional().describe('Filter contacts by group ID'),
   limit: z.number().optional().describe('Maximum number of contacts to return (default: 200)'),
 });
 
-export const listContactGroupsSchema = z.object({});
+export const listContactGroupsSchema = strictObject({});
 
-export const createContactSchema = z.object({
+export const createContactSchema = strictObject({
   givenName: z.string().optional().describe('First name'),
   familyName: z.string().optional().describe('Last name'),
   middleName: z.string().optional().describe('Middle name'),
@@ -65,7 +67,7 @@ export const createContactSchema = z.object({
   note: z.string().optional().describe('Notes about the contact'),
 });
 
-export const updateContactSchema = z.object({
+export const updateContactSchema = strictObject({
   id: z.string().describe('The unique identifier of the contact to update'),
   givenName: z.string().optional().describe('First name'),
   familyName: z.string().optional().describe('Last name'),
@@ -84,6 +86,6 @@ export const updateContactSchema = z.object({
   note: z.string().optional().describe('Notes about the contact'),
 });
 
-export const deleteContactSchema = z.object({
+export const deleteContactSchema = strictObject({
   id: z.string().describe('The unique identifier of the contact to delete'),
 });

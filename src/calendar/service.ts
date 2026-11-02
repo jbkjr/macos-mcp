@@ -3,7 +3,8 @@
  * Business logic for calendar operations via Swift CLI
  */
 
-import { executeCli } from '../utils/eventkit-cli.js';
+import { guardedResultOrUnverified, parseGuardedCreate, parseGuardedReschedule, parseGuardedUpdate, unverifiedGuardedResult, type GuardedCalendarResult } from './guarded.js';
+import { BRIDGE_NOT_INSTALLED, executeCli } from '../utils/eventkit-cli.js';
 import type { Calendar, CalendarEvent, DeleteResult, EventsReadResult } from './types.js';
 
 /**
@@ -23,7 +24,31 @@ function addOptionalArgs(
   }
 }
 
+/**
+ * Once the bridge may have launched, a lost or unreadable answer means the save may
+ * have happened. That is `unverified`, never a plain error a caller might retry.
+ */
+async function runGuarded(action: string, request: { event_id?: string; calendar_id?: string }): Promise<GuardedCalendarResult> {
+  const ids = { event_id: request.event_id ?? null, calendar_id: request.calendar_id ?? null };
+  try {
+    return guardedResultOrUnverified(await executeCli<unknown>(['--action', action, JSON.stringify(request)]), ids);
+  } catch (error) {
+    if ((error as { code?: string }).code === BRIDGE_NOT_INSTALLED) throw error;
+    return unverifiedGuardedResult(ids);
+  }
+}
+
 export class CalendarService {
+  async guardedCreateEvent(input: unknown): Promise<GuardedCalendarResult> {
+    return runGuarded('guarded-calendar-create-event', parseGuardedCreate(input));
+  }
+  async guardedRescheduleEvent(input: unknown): Promise<GuardedCalendarResult> {
+    return runGuarded('guarded-calendar-reschedule-event', parseGuardedReschedule(input));
+  }
+  async guardedUpdateEvent(input: unknown): Promise<GuardedCalendarResult> {
+    return runGuarded('guarded-calendar-update-event', parseGuardedUpdate(input));
+  }
+
   async listCalendars(): Promise<Calendar[]> {
     return executeCli<Calendar[]>(['--action', 'read-calendars']);
   }

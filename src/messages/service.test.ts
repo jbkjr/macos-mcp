@@ -22,6 +22,7 @@ vi.mock('./parser.js', async () => {
 // Mock the applescript module
 vi.mock('../utils/applescript.js', () => ({
   runAppleScript: vi.fn(),
+  runAppleScriptWithArgs: vi.fn(),
   escapeForAppleScript: vi.fn((str) => str),
 }));
 
@@ -60,7 +61,7 @@ describe('MessagesService', () => {
     getDatabaseMock.mockReturnValue(mockDb);
 
     const asModule = await import('../utils/applescript.js');
-    runAppleScriptMock = asModule.runAppleScript;
+    runAppleScriptMock = asModule.runAppleScriptWithArgs;
 
     const cliModule = await import('../utils/eventkit-cli.js');
     executeCliMock = cliModule.executeCli;
@@ -367,12 +368,12 @@ describe('MessagesService', () => {
       executeCliMock.mockResolvedValue({
         contacts: [
           { id: 'contact-1', fullName: 'John Doe', phoneNumbers: [{ number: '+1234567890' }], emailAddresses: [] },
-          { id: 'contact-2', fullName: 'John Smith', phoneNumbers: [{ number: '+0987654321' }], emailAddresses: [] },
+          { id: 'contact-2', fullName: 'John Doe', phoneNumbers: [{ number: '+0987654321' }], emailAddresses: [] },
         ],
       });
 
       const result = await service.sendMessage({
-        recipient: 'John',
+        recipient: 'John Doe',
         text: 'Hello!',
       });
 

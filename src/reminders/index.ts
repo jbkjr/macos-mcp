@@ -31,39 +31,49 @@ export function registerReminderTools(server: McpServer): void {
   const service = new RemindersService();
 
   // List tools
-  server.tool(
+  server.registerTool(
     'list_reminder_lists',
-    'List all reminder lists',
-    listReminderListsSchema.shape,
+    {
+      description: 'List all reminder lists',
+      inputSchema: listReminderListsSchema,
+    },
     wrapToolHandler(async () => service.listLists())
   );
 
-  server.tool(
+  server.registerTool(
     'create_reminder_list',
-    'Create a new reminder list',
-    createReminderListSchema.shape,
+    {
+      description: 'Create a new reminder list',
+      inputSchema: createReminderListSchema,
+    },
     wrapToolHandler(async (params) => service.createList(params.name))
   );
 
-  server.tool(
+  server.registerTool(
     'rename_reminder_list',
-    'Rename an existing reminder list',
-    renameReminderListSchema.shape,
+    {
+      description: 'Rename an existing reminder list',
+      inputSchema: renameReminderListSchema,
+    },
     wrapToolHandler(async (params) => service.renameList(params.name, params.newName))
   );
 
-  server.tool(
+  server.registerTool(
     'delete_reminder_list',
-    'Delete a reminder list',
-    deleteReminderListSchema.shape,
+    {
+      description: 'Delete a reminder list',
+      inputSchema: deleteReminderListSchema,
+    },
     wrapToolHandler(async (params) => service.deleteList(params.name))
   );
 
   // Reminder tools
-  server.tool(
+  server.registerTool(
     'list_reminders',
-    'List reminders with optional filters (list, search, due date range, priority)',
-    listRemindersSchema.shape,
+    {
+      description: 'List reminders with optional filters (list, search, due date range, priority)',
+      inputSchema: listRemindersSchema,
+    },
     wrapToolHandler(async (params) => {
       return service.listReminders({
         ...params,
@@ -73,34 +83,42 @@ export function registerReminderTools(server: McpServer): void {
     })
   );
 
-  server.tool(
+  server.registerTool(
     'get_reminder',
-    'Get a single reminder by ID',
-    getReminderSchema.shape,
+    {
+      description: 'Get a single reminder by ID',
+      inputSchema: getReminderSchema,
+    },
     wrapToolHandler(async (params) => service.getReminder(params.id))
   );
 
-  server.tool(
+  server.registerTool(
     'create_reminder',
-    'Create a new reminder',
-    createReminderSchema.shape,
+    {
+      description: 'Create a new reminder',
+      inputSchema: createReminderSchema,
+    },
     wrapToolHandler(async (params) => service.createReminder(params))
   );
 
-  server.tool(
+  server.registerTool(
     'update_reminder',
-    'Update an existing reminder',
-    updateReminderSchema.shape,
+    {
+      description: 'Update an existing reminder',
+      inputSchema: updateReminderSchema,
+    },
     wrapToolHandler(async (params) => {
       const { id, ...updates } = params;
       return service.updateReminder(id, updates);
     })
   );
 
-  server.tool(
+  server.registerTool(
     'delete_reminder',
-    'Delete a reminder by ID',
-    deleteReminderSchema.shape,
+    {
+      description: 'Delete a reminder by ID',
+      inputSchema: deleteReminderSchema,
+    },
     wrapToolHandler(async (params) => service.deleteReminder(params.id))
   );
 }

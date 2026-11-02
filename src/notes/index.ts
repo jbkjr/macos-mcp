@@ -30,67 +30,85 @@ export function registerNoteTools(server: McpServer): void {
   const service = new NotesService();
 
   // Folder tools
-  server.tool(
+  server.registerTool(
     'list_note_folders',
-    'List all folders in Apple Notes',
-    listNoteFoldersSchema.shape,
+    {
+      description: 'List all folders in Apple Notes',
+      inputSchema: listNoteFoldersSchema,
+    },
     wrapToolHandler(async () => service.listFolders())
   );
 
-  server.tool(
+  server.registerTool(
     'create_note_folder',
-    'Create a new folder in Apple Notes',
-    createNoteFolderSchema.shape,
+    {
+      description: 'Create a new folder in Apple Notes',
+      inputSchema: createNoteFolderSchema,
+    },
     wrapToolHandler(async (params) => service.createFolder(params.name, params.parentFolder))
   );
 
-  server.tool(
+  server.registerTool(
     'delete_note_folder',
-    'Delete a folder from Apple Notes',
-    deleteNoteFolderSchema.shape,
+    {
+      description: 'Delete a folder from Apple Notes',
+      inputSchema: deleteNoteFolderSchema,
+    },
     wrapToolHandler(async (params) => service.deleteFolder(params.name))
   );
 
   // Note tools
-  server.tool(
+  server.registerTool(
     'list_notes',
-    'List notes in Apple Notes (optionally filtered by folder)',
-    listNotesSchema.shape,
+    {
+      description: 'List notes in Apple Notes (optionally filtered by folder)',
+      inputSchema: listNotesSchema,
+    },
     wrapToolHandler(async (params) => service.listNotes(params))
   );
 
-  server.tool(
+  server.registerTool(
     'get_note',
-    'Get the content of a note by title',
-    getNoteSchema.shape,
+    {
+      description: 'Get the content of a note by title',
+      inputSchema: getNoteSchema,
+    },
     wrapToolHandler(async (params) => service.getNote(params.title, params.folder))
   );
 
-  server.tool(
+  server.registerTool(
     'create_note',
-    'Create a new note in Apple Notes (supports Markdown content)',
-    createNoteSchema.shape,
+    {
+      description: 'Create a new note in Apple Notes (supports Markdown content)',
+      inputSchema: createNoteSchema,
+    },
     wrapToolHandler(async (params) => service.createNote(params))
   );
 
-  server.tool(
+  server.registerTool(
     'update_note',
-    'Update an existing note in Apple Notes',
-    updateNoteSchema.shape,
+    {
+      description: 'Update an existing note in Apple Notes',
+      inputSchema: updateNoteSchema,
+    },
     wrapToolHandler(async (params) => service.updateNote(params))
   );
 
-  server.tool(
+  server.registerTool(
     'delete_note',
-    'Delete a note from Apple Notes',
-    deleteNoteSchema.shape,
+    {
+      description: 'Delete a note from Apple Notes',
+      inputSchema: deleteNoteSchema,
+    },
     wrapToolHandler(async (params) => service.deleteNote(params.title, params.folder))
   );
 
-  server.tool(
+  server.registerTool(
     'search_notes',
-    'Search for notes by title',
-    searchNotesSchema.shape,
+    {
+      description: 'Search for notes by title',
+      inputSchema: searchNotesSchema,
+    },
     wrapToolHandler(async (params) => service.searchNotes(params.query, params.folder))
   );
 }

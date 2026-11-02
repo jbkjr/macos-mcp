@@ -27,12 +27,14 @@ export * from './tools.js';
 export function registerContactTools(server: McpServer): void {
   const service = new ContactsService();
 
-  server.tool(
+  server.registerTool(
     'search_contacts',
-    'Search contacts by name, phone number, or email address. ' +
+    {
+      description: 'Search contacts by name, phone number, or email address. ' +
       'Returns matching contacts with full details. ' +
       'Requires Contacts permission.',
-    searchContactsSchema.shape,
+      inputSchema: searchContactsSchema,
+    },
     wrapToolHandler(async (params) => {
       if (!params.name && !params.phone && !params.email) {
         throw new Error('Must provide name, phone, or email to search contacts');
@@ -41,48 +43,60 @@ export function registerContactTools(server: McpServer): void {
     })
   );
 
-  server.tool(
+  server.registerTool(
     'get_contact',
-    'Get a single contact by ID with full details',
-    getContactSchema.shape,
+    {
+      description: 'Get a single contact by ID with full details',
+      inputSchema: getContactSchema,
+    },
     wrapToolHandler(async (params) => service.getContact(params.id))
   );
 
-  server.tool(
+  server.registerTool(
     'list_contacts',
-    'List contacts, optionally filtered by group. Returns up to limit contacts (default: 200).',
-    listContactsSchema.shape,
+    {
+      description: 'List contacts, optionally filtered by group. Returns up to limit contacts (default: 200).',
+      inputSchema: listContactsSchema,
+    },
     wrapToolHandler(async (params) => service.listContacts(params))
   );
 
-  server.tool(
+  server.registerTool(
     'list_contact_groups',
-    'List all contact groups',
-    listContactGroupsSchema.shape,
+    {
+      description: 'List all contact groups',
+      inputSchema: listContactGroupsSchema,
+    },
     wrapToolHandler(async () => service.listGroups())
   );
 
-  server.tool(
+  server.registerTool(
     'create_contact',
-    'Create a new contact. At least one of givenName, familyName, or organizationName should be provided.',
-    createContactSchema.shape,
+    {
+      description: 'Create a new contact. At least one of givenName, familyName, or organizationName should be provided.',
+      inputSchema: createContactSchema,
+    },
     wrapToolHandler(async (params) => service.createContact(params))
   );
 
-  server.tool(
+  server.registerTool(
     'update_contact',
-    'Update an existing contact. Array fields (phones, emails, addresses, URLs) replace all existing values when provided.',
-    updateContactSchema.shape,
+    {
+      description: 'Update an existing contact. Array fields (phones, emails, addresses, URLs) replace all existing values when provided.',
+      inputSchema: updateContactSchema,
+    },
     wrapToolHandler(async (params) => {
       const { id, ...updates } = params;
       return service.updateContact(id, updates);
     })
   );
 
-  server.tool(
+  server.registerTool(
     'delete_contact',
-    'Delete a contact by ID',
-    deleteContactSchema.shape,
+    {
+      description: 'Delete a contact by ID',
+      inputSchema: deleteContactSchema,
+    },
     wrapToolHandler(async (params) => service.deleteContact(params.id))
   );
 }

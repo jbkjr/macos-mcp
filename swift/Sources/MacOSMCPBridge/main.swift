@@ -1,14 +1,15 @@
 import Foundation
+import BridgeCore
 import Dispatch
 import EventKit
 import Contacts
 
 // MARK: - Output Structures & JSON Models
-struct StandardOutput<T: Codable>: Codable { let status = "success"; let result: T }
+struct StandardOutput<T: Encodable>: Encodable { let status = "success"; let result: T }
 struct ErrorOutput: Codable { let status = "error"; let message: String }
 
 // Calendar Models
-struct CalendarJSON: Codable { let id: String, title: String }
+struct CalendarJSON: Codable { let id: String, title: String, sourceId: String, sourceTitle: String }
 struct EventJSON: Codable { let id: String, title: String, calendar: String, startDate: String, endDate: String, notes: String?, location: String?, url: String?, isAllDay: Bool }
 struct EventsReadResult: Codable { let calendars: [CalendarJSON]; let events: [EventJSON] }
 struct DeleteResult: Codable { let id: String; let deleted = true }
@@ -82,158 +83,6 @@ struct ContactListResult: Codable { let contacts: [ContactJSON]; let totalCount:
 struct ContactGroupJSON: Codable { let id: String; let name: String }
 
 // MARK: - Date Parsing Helper
-private struct ExplicitTimezone {
-    let suffix: String
-    let timeZone: TimeZone
-}
-
-private func detectExplicitTimezone(in dateString: String) -> ExplicitTimezone? {
-    let trimmed = dateString.trimmingCharacters(in: .whitespacesAndNewlines)
-    if trimmed.hasSuffix("Z") {
-        guard let tz = TimeZone(secondsFromGMT: 0) else { return nil }
-        return ExplicitTimezone(suffix: "Z", timeZone: tz)
-    }
-
-    let pattern = #"[+-]\d{2}:\d{2}$|[+-]\d{4}$|[+-]\d{2}$"#
-    guard let range = trimmed.range(of: pattern, options: .regularExpression) else {
-        return nil
-    }
-
-    let suffix = String(trimmed[range])
-    let sign: Int = suffix.first == "-" ? -1 : 1
-    let numeric = suffix.dropFirst()
-
-    let components: (hours: Int, minutes: Int)? = {
-        if suffix.contains(":") {
-            let parts = numeric.split(separator: ":")
-            guard parts.count == 2,
-                  let hourValue = Int(parts[0]),
-                  let minuteValue = Int(parts[1]) else { return nil }
-            return (hourValue, minuteValue)
-        }
-        if numeric.count == 4 {
-            let hoursPart = numeric.prefix(2)
-            let minutesPart = numeric.suffix(2)
-            guard let hourValue = Int(hoursPart),
-                  let minuteValue = Int(minutesPart) else { return nil }
-            return (hourValue, minuteValue)
-        }
-        if numeric.count == 2, let hourValue = Int(numeric) {
-            return (hourValue, 0)
-        }
-        return nil
-    }()
-
-    guard let offset = components else { return nil }
-    let totalSeconds = sign * ((offset.hours * 60 + offset.minutes) * 60)
-    guard let timeZone = TimeZone(secondsFromGMT: totalSeconds) else { return nil }
-    return ExplicitTimezone(suffix: suffix, timeZone: timeZone)
-}
-
-private func formatterWithBaseLocale() -> DateFormatter {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.calendar = Calendar(identifier: .gregorian)
-    return formatter
-}
-
-private func normalizedComponents(_ components: inout DateComponents, using calendar: Calendar, timeZone: TimeZone?) {
-    components.calendar = calendar
-    components.timeZone = timeZone
-    if components.second == nil && components.hour != nil { components.second = 0 }
-    if components.nanosecond != nil { components.nanosecond = 0 }
-}
-
-private func componentsSet(for input: String) -> Set<Calendar.Component> {
-    if input.contains(":") || input.contains("T") {
-        return [.year, .month, .day, .hour, .minute, .second]
-    }
-    return [.year, .month, .day]
-}
-
-private func parseDateComponents(from dateString: String) -> DateComponents? {
-    let trimmedInput = dateString.trimmingCharacters(in: .whitespacesAndNewlines)
-
-    if let tzInfo = detectExplicitTimezone(in: trimmedInput) {
-        let formatter = formatterWithBaseLocale()
-        formatter.timeZone = tzInfo.timeZone
-
-        let formatsWithTimezone = [
-            "yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ",
-            "yyyy-MM-dd HH:mm:ss.SSSZZZZZ",
-            "yyyy-MM-dd'T'HH:mm:ssZZZZZ",
-            "yyyy-MM-dd HH:mm:ssZZZZZ",
-            "yyyy-MM-dd'T'HH:mmZZZZZ",
-            "yyyy-MM-dd HH:mmZZZZZ",
-            "yyyy-MM-ddZZZZZ",
-            "yyyy-MM-dd'T'HH:mm:ss.SSSZZZ",
-            "yyyy-MM-dd HH:mm:ss.SSSZZZ",
-            "yyyy-MM-dd'T'HH:mm:ssZZZ",
-            "yyyy-MM-dd HH:mm:ssZZZ",
-            "yyyy-MM-dd'T'HH:mmZZZ",
-            "yyyy-MM-dd HH:mmZZZ",
-            "yyyy-MM-ddZZZ",
-            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
-            "yyyy-MM-dd HH:mm:ss.SSSZ",
-            "yyyy-MM-dd'T'HH:mm:ssZ",
-            "yyyy-MM-dd HH:mm:ssZ",
-            "yyyy-MM-dd'T'HH:mmZ",
-            "yyyy-MM-dd HH:mmZ",
-            "yyyy-MM-ddZ"
-        ]
-
-        for format in formatsWithTimezone {
-            formatter.dateFormat = format
-            if let parsedDate = formatter.date(from: trimmedInput) {
-                var calendar = Calendar(identifier: .gregorian)
-                calendar.timeZone = tzInfo.timeZone
-                var components = calendar.dateComponents(componentsSet(for: trimmedInput), from: parsedDate)
-                normalizedComponents(&components, using: calendar, timeZone: tzInfo.timeZone)
-                return components
-            }
-        }
-    }
-
-    let formatter = formatterWithBaseLocale()
-    formatter.timeZone = TimeZone.current
-
-    let localFormats = [
-        "yyyy-MM-dd'T'HH:mm:ss.SSS",
-        "yyyy-MM-dd HH:mm:ss.SSS",
-        "yyyy-MM-dd'T'HH:mm:ss",
-        "yyyy-MM-dd HH:mm:ss",
-        "yyyy-MM-dd'T'HH:mm",
-        "yyyy-MM-dd HH:mm",
-        "yyyy-MM-dd"
-    ]
-
-    for format in localFormats {
-        formatter.dateFormat = format
-        if let parsedDate = formatter.date(from: trimmedInput) {
-            var calendar = Calendar(identifier: .gregorian)
-            calendar.timeZone = TimeZone.current
-            var components = calendar.dateComponents(componentsSet(for: trimmedInput), from: parsedDate)
-            normalizedComponents(&components, using: calendar, timeZone: nil)
-            return components
-        }
-    }
-
-    return nil
-}
-
-func parseDate(from dateString: String) -> Date? {
-    guard var components = parseDateComponents(from: dateString) else { return nil }
-    let calendar: Calendar = {
-        if let existing = components.calendar { return existing }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = components.timeZone ?? TimeZone.current
-        return calendar
-    }()
-    components.calendar = calendar
-    components.timeZone = components.timeZone ?? calendar.timeZone
-    return calendar.date(from: components)
-}
-
 /// The instant reminder date components refer to; floating components resolve in the current time zone.
 private func resolvedDate(from dateComponents: DateComponents?) -> Date? {
     guard var components = dateComponents else { return nil }
@@ -452,7 +301,7 @@ class EventKitManager {
     }
 
     func getCalendars() -> [CalendarJSON] {
-        return eventStore.calendars(for: .event).map { CalendarJSON(id: $0.calendarIdentifier, title: $0.title) }
+        return eventStore.calendars(for: .event).map { CalendarJSON(id: $0.calendarIdentifier, title: $0.title, sourceId: $0.source.sourceIdentifier, sourceTitle: $0.source.title) }
     }
 
     func getEvents(startDate: Date?, endDate: Date?, calendarName: String?, search: String?) throws -> [EventJSON] {
@@ -569,7 +418,7 @@ class EventKitManager {
         let semaphore = DispatchSemaphore(value: 0)
         var fetchedReminders: [EKReminder]?
         eventStore.fetchReminders(matching: predicate) { reminders in fetchedReminders = reminders; semaphore.signal() }
-        semaphore.wait()
+        try waitForCallback(semaphore, seconds: remindersFetchTimeoutSeconds, waitingFor: "Reminders to answer")
 
         guard let reminders = fetchedReminders else { return [] }
 
@@ -615,6 +464,7 @@ class EventKitManager {
     }
 
     func createReminder(title: String, listName: String?, notes: String?, urlString: String?, dueDateString: String?, recurrenceString: String?, priorityString: String?) throws -> ReminderJSON {
+        let dueChange = try parseDueDateArgument(dueDateString)
         let reminder = EKReminder(eventStore: eventStore)
         reminder.calendar = try findList(named: listName)
         reminder.title = title
@@ -633,14 +483,12 @@ class EventKitManager {
         }
         if let finalNotes = finalNotes { reminder.notes = finalNotes }
 
-        if let dateStr = dueDateString {
-            if let parsedComponents = parseDateComponents(from: dateStr) {
-                reminder.dueDateComponents = parsedComponents
-                reminder.timeZone = parsedComponents.timeZone
-                // Like Reminders.app, give a timed reminder an alarm; without one it never notifies.
-                if parsedComponents.hour != nil, let dueDate = resolvedDate(from: parsedComponents) {
-                    reminder.addAlarm(EKAlarm(absoluteDate: dueDate))
-                }
+        if let parsedComponents = dueChange.components {
+            reminder.dueDateComponents = parsedComponents
+            reminder.timeZone = parsedComponents.timeZone
+            // Like Reminders.app, give a timed reminder an alarm; without one it never notifies.
+            if parsedComponents.hour != nil, let dueDate = resolvedDate(from: parsedComponents) {
+                reminder.addAlarm(EKAlarm(absoluteDate: dueDate))
             }
         }
 
@@ -660,6 +508,8 @@ class EventKitManager {
     }
 
     func updateReminder(id: String, newTitle: String?, listName: String?, notes: String?, urlString: String?, isCompleted: Bool?, dueDateString: String?, recurrenceString: String?, priorityString: String?) throws -> ReminderJSON {
+        // Before anything else: an unparseable date must change nothing, least of all clear the due date.
+        let dueChange = try parseDueDateArgument(dueDateString)
         guard let reminder = findReminder(withId: id) else {
             throw NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "ID '\(id)' not found."])
         }
@@ -698,12 +548,12 @@ class EventKitManager {
 
         if let isCompleted = isCompleted { reminder.isCompleted = isCompleted }
         if let listName = listName { reminder.calendar = try findList(named: listName) }
-        if let dateStr = dueDateString {
+        if dueChange.isChange {
             // Reminders.app shows and notifies at a reminder's absolute alarm, not its
             // dueDateComponents, so alarms and the start date must follow the due date.
             let oldDue = resolvedDate(from: reminder.dueDateComponents)
             let oldStart = reminder.startDateComponents
-            let parsedComponents = parseDateComponents(from: dateStr)
+            let parsedComponents = dueChange.components
             reminder.dueDateComponents = parsedComponents
             reminder.timeZone = parsedComponents?.timeZone
 
@@ -1178,32 +1028,6 @@ extension EKEvent {
     }
 }
 
-// MARK: - Argument Parser
-struct ArgumentParser {
-    private let args: [String: String]
-
-    init() {
-        var dict = [String: String]()
-        var i = 0
-        let arguments = Array(CommandLine.arguments.dropFirst())
-        while i < arguments.count {
-            let key = arguments[i].replacingOccurrences(of: "--", with: "")
-            if i + 1 < arguments.count && !arguments[i + 1].hasPrefix("--") {
-                dict[key] = arguments[i + 1]
-                i += 2
-            } else {
-                dict[key] = "true"
-                i += 1
-            }
-        }
-        self.args = dict
-    }
-
-    func get(_ key: String) -> String? {
-        return args[key]
-    }
-}
-
 // MARK: - Permission Handling
 enum PermissionDomain: String {
     case calendars = "Calendars"
@@ -1269,7 +1093,24 @@ func handleContactsPermission(
 
 // MARK: - Main
 func main() {
-    let parser = ArgumentParser()
+    let arguments = Array(CommandLine.arguments.dropFirst())
+    let isGuarded = arguments.count >= 2 && arguments[0] == "--action" && arguments[1].hasPrefix("guarded-calendar-")
+    // Nothing below may run forever: a hung EventKit call, or a prompt nobody answers,
+    // ends here. A guarded write says nothing, which the server reports as unverified,
+    // because a save may already have happened.
+    startWatchdog(after: bridgeWatchdogSeconds) {
+        if !isGuarded, let data = try? JSONEncoder().encode(ErrorOutput(message: "Timed out after \(Int(bridgeWatchdogSeconds)) s waiting for macOS. If a permission prompt is open, answer it and try again.")),
+           let json = String(data: data, encoding: .utf8) {
+            print(json)
+        }
+        exit(1)
+    }
+    // Guarded JSON never enters the legacy flag parser or permission request flow.
+    if isGuarded {
+        let result = runGuardedCalendar(arguments: arguments)
+        print(String(decoding: try! JSONEncoder().encode(StandardOutput(result: result)), as: UTF8.self))
+        return
+    }
     let manager = EventKitManager()
     let encoder = JSONEncoder()
     encoder.outputFormatting = .prettyPrinted
@@ -1280,6 +1121,13 @@ func main() {
             print(json)
         }
         exit(1)
+    }
+
+    let parser: BridgeArguments
+    do {
+        parser = try BridgeArguments(arguments)
+    } catch {
+        outputError(error.localizedDescription)
     }
 
     func outputResult<T: Codable>(_ result: T) throws {

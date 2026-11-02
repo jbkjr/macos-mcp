@@ -4,6 +4,14 @@
 
 import { z } from 'zod';
 
+import { strictObject } from '../utils/strict.js';
+import { isBridgeDueDate } from './due-date.js';
+
+/** Empty clears on update and means no date on create; anything else must parse or the call fails. */
+const dueDateInput = z.string().refine((value) => value === '' || isBridgeDueDate(value), {
+  error: "Invalid dueDate; nothing was changed. Use 'YYYY-MM-DD', 'YYYY-MM-DD HH:mm:ss' or ISO 8601, or an empty string to clear.",
+});
+
 // Due within options
 const dueWithinOptions = ['today', 'tomorrow', 'this-week', 'overdue', 'no-date', 'scheduled'] as const;
 
@@ -11,18 +19,18 @@ const dueWithinOptions = ['today', 'tomorrow', 'this-week', 'overdue', 'no-date'
 const priorityOptions = ['none', 'low', 'medium', 'high'] as const;
 
 // Recurrence schemas
-export const dayOfWeekSchema = z.object({
+export const dayOfWeekSchema = strictObject({
   dayOfWeek: z.number().int().min(1).max(7).describe('Day of week: 1=Sunday, 2=Monday, ..., 7=Saturday'),
   weekNumber: z.number().int().min(-1).max(5).optional().describe('For monthly/yearly: 1-5 or -1 (last)'),
 });
 
-export const recurrenceEndSchema = z.object({
+export const recurrenceEndSchema = strictObject({
   type: z.enum(['never', 'date', 'count']).describe('End condition type'),
   date: z.string().optional().describe('ISO 8601 date when type="date"'),
   count: z.number().int().positive().optional().describe('Number of occurrences when type="count"'),
 });
 
-export const recurrenceRuleSchema = z.object({
+export const recurrenceRuleSchema = strictObject({
   frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']).describe('Recurrence frequency'),
   interval: z.number().int().positive().default(1).describe('Interval between occurrences (e.g., 2 = every 2 weeks)'),
   daysOfTheWeek: z.array(dayOfWeekSchema).optional().describe('Days of week (weekly/monthly/yearly)'),
@@ -35,23 +43,23 @@ export const recurrenceRuleSchema = z.object({
 });
 
 // List tools
-export const listReminderListsSchema = z.object({});
+export const listReminderListsSchema = strictObject({});
 
-export const createReminderListSchema = z.object({
+export const createReminderListSchema = strictObject({
   name: z.string().describe('The name for the new reminder list'),
 });
 
-export const renameReminderListSchema = z.object({
+export const renameReminderListSchema = strictObject({
   name: z.string().describe('The current name of the list to rename'),
   newName: z.string().describe('The new name for the list'),
 });
 
-export const deleteReminderListSchema = z.object({
+export const deleteReminderListSchema = strictObject({
   name: z.string().describe('The name of the list to delete'),
 });
 
 // Reminder tools
-export const listRemindersSchema = z.object({
+export const listRemindersSchema = strictObject({
   filterList: z.string().optional().describe('Filter reminders by list name'),
   showCompleted: z.boolean().optional().describe('Include completed reminders (default: false)'),
   search: z.string().optional().describe('Search term to filter reminders by title or notes'),
@@ -59,32 +67,32 @@ export const listRemindersSchema = z.object({
   priority: z.enum(priorityOptions).optional().describe('Filter reminders by priority level'),
 });
 
-export const getReminderSchema = z.object({
+export const getReminderSchema = strictObject({
   id: z.string().describe('The unique identifier of the reminder'),
 });
 
-export const createReminderSchema = z.object({
+export const createReminderSchema = strictObject({
   title: z.string().describe('The title of the reminder'),
   targetList: z.string().optional().describe('The list to create the reminder in (defaults to default list)'),
   notes: z.string().optional().describe('Additional notes for the reminder'),
   url: z.string().url().optional().describe('A URL to associate with the reminder'),
-  dueDate: z.string().optional().describe("Due date in local time by default (format: 'YYYY-MM-DD HH:mm:ss'). Only include a timezone offset if explicitly specified."),
+  dueDate: dueDateInput.optional().describe("Due date in local time by default (format: 'YYYY-MM-DD HH:mm:ss'). Only include a timezone offset if explicitly specified."),
   recurrence: recurrenceRuleSchema.optional().describe('Recurrence rule for repeating reminders'),
   priority: z.enum(priorityOptions).optional().describe('Priority level (none, low, medium, high)'),
 });
 
-export const updateReminderSchema = z.object({
+export const updateReminderSchema = strictObject({
   id: z.string().describe('The unique identifier of the reminder to update'),
   title: z.string().optional().describe('New title for the reminder'),
   targetList: z.string().optional().describe('Move reminder to a different list'),
   notes: z.string().optional().describe('New notes for the reminder'),
   url: z.string().optional().describe('New URL for the reminder (empty string to remove)'),
-  dueDate: z.string().optional().describe("New due date in local time by default (format: 'YYYY-MM-DD HH:mm:ss', empty string to remove). Only include a timezone offset if explicitly specified."),
+  dueDate: dueDateInput.optional().describe("New due date in local time by default (format: 'YYYY-MM-DD HH:mm:ss', empty string to remove). Only include a timezone offset if explicitly specified."),
   completed: z.boolean().optional().describe('Mark the reminder as completed or not'),
   recurrence: recurrenceRuleSchema.nullable().optional().describe('Recurrence rule (null to remove, object to set/update)'),
   priority: z.enum(priorityOptions).optional().describe('Priority level (none, low, medium, high)'),
 });
 
-export const deleteReminderSchema = z.object({
+export const deleteReminderSchema = strictObject({
   id: z.string().describe('The unique identifier of the reminder to delete'),
 });

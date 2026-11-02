@@ -4,20 +4,22 @@
 
 import { z } from 'zod';
 
-export const listCalendarsSchema = z.object({});
+import { strictObject } from '../utils/strict.js';
 
-export const listCalendarEventsSchema = z.object({
+export const listCalendarsSchema = strictObject({});
+
+export const listCalendarEventsSchema = strictObject({
   filterCalendar: z.string().optional().describe('Filter events by calendar name'),
   search: z.string().optional().describe('Search term to filter events by title, notes, or location'),
   startDate: z.string().optional().describe("Start date for filtering events (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"),
   endDate: z.string().optional().describe("End date for filtering events (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"),
 });
 
-export const getCalendarEventSchema = z.object({
+export const getCalendarEventSchema = strictObject({
   id: z.string().describe('The unique identifier of the event'),
 });
 
-export const createCalendarEventSchema = z.object({
+export const createCalendarEventSchema = strictObject({
   title: z.string().describe('The title of the event'),
   startDate: z.string().describe("Start date and time (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"),
   endDate: z.string().describe("End date and time (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"),
@@ -28,7 +30,7 @@ export const createCalendarEventSchema = z.object({
   isAllDay: z.boolean().optional().describe('Whether this is an all-day event'),
 });
 
-export const updateCalendarEventSchema = z.object({
+export const updateCalendarEventSchema = strictObject({
   id: z.string().describe('The unique identifier of the event to update'),
   title: z.string().optional().describe('New title for the event'),
   startDate: z.string().optional().describe("New start date and time (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"),
@@ -40,6 +42,6 @@ export const updateCalendarEventSchema = z.object({
   isAllDay: z.boolean().optional().describe('Whether this is an all-day event'),
 });
 
-export const deleteCalendarEventSchema = z.object({
+export const deleteCalendarEventSchema = strictObject({
   id: z.string().describe('The unique identifier of the event to delete'),
 });
