@@ -27,7 +27,10 @@ npm run build:all    # Build both TypeScript and Swift
 npm run build        # TypeScript only
 npm run build:swift  # Swift only
 npm test             # Run Vitest tests
+bash scripts/test-guarded-calendar.sh  # Pure Swift core tests; never launches the bridge
 ```
+
+`tests/golden/tools-list.json` pins `tools/list`. Regenerate an intended change with `UPDATE_GOLDEN=1 npx vitest run tests/tools-list.test.ts` and review the diff. Eleven tools are pinned by mcp-gateway (see that test); don't change their names or arguments without moving the gateway too.
 
 Swift binary compiles to `bin/macos-mcp-bridge`.
 

@@ -1,0 +1,1709 @@
+{
+  "instructions": "When passing dates/times, use local time by default (e.g. \"2026-03-20 09:00:00\") without timezone offsets. Only include timezone information if the user explicitly specifies one.",
+  "tools": [
+    {
+      "name": "guarded_calendar_create_event",
+      "description": "Save one guest-free, non-recurring event on an allowlisted calendar. All-day dates float and end is exclusive.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "calendar_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "RFC 3339 with offset for timed events; YYYY-MM-DD for all-day events"
+          },
+          "end": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Exclusive end; RFC 3339 with offset or YYYY-MM-DD matching start"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timed events use this zone; all-day dates float in the Mac system default zone"
+          },
+          "is_all_day": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "calendar_id",
+          "title",
+          "start",
+          "end",
+          "time_zone",
+          "is_all_day"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "guarded_calendar_reschedule_event",
+      "description": "Replace start, end and time zone of one eligible event, preserving its calendar and all-day kind.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "end": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Exclusive end; preserve the event’s existing all-day/timed kind"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timed events use this zone; all-day dates float in the Mac system default zone"
+          }
+        },
+        "required": [
+          "event_id",
+          "start",
+          "end",
+          "time_zone"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "guarded_calendar_update_event",
+      "description": "Replace title, notes or location of one eligible event. Empty notes/location clears; omission preserves.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "notes": {
+            "description": "Empty string clears notes; omission preserves them",
+            "type": "string"
+          },
+          "location": {
+            "description": "Empty string clears location; omission preserves it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_calendars",
+      "description": "List all available calendars",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_calendar_events",
+      "description": "List calendar events with optional filters (calendar, search, date range)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filterCalendar": {
+            "description": "Filter events by calendar name",
+            "type": "string"
+          },
+          "search": {
+            "description": "Search term to filter events by title, notes, or location",
+            "type": "string"
+          },
+          "startDate": {
+            "description": "Start date for filtering events (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)",
+            "type": "string"
+          },
+          "endDate": {
+            "description": "End date for filtering events (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)",
+            "type": "string"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_calendar_event",
+      "description": "Get a single calendar event by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the event"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_calendar_event",
+      "description": "Create a new calendar event",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the event"
+          },
+          "startDate": {
+            "type": "string",
+            "description": "Start date and time (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"
+          },
+          "endDate": {
+            "type": "string",
+            "description": "End date and time (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)"
+          },
+          "targetCalendar": {
+            "description": "The calendar to create the event in (defaults to default calendar)",
+            "type": "string"
+          },
+          "notes": {
+            "description": "Additional notes for the event",
+            "type": "string"
+          },
+          "location": {
+            "description": "Location for the event",
+            "type": "string"
+          },
+          "url": {
+            "description": "A URL to associate with the event",
+            "type": "string",
+            "format": "uri"
+          },
+          "isAllDay": {
+            "description": "Whether this is an all-day event",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "title",
+          "startDate",
+          "endDate"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_calendar_event",
+      "description": "Update an existing calendar event",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the event to update"
+          },
+          "title": {
+            "description": "New title for the event",
+            "type": "string"
+          },
+          "startDate": {
+            "description": "New start date and time (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)",
+            "type": "string"
+          },
+          "endDate": {
+            "description": "New end date and time (format: 'YYYY-MM-DD HH:mm:ss' or ISO 8601)",
+            "type": "string"
+          },
+          "targetCalendar": {
+            "description": "Move event to a different calendar",
+            "type": "string"
+          },
+          "notes": {
+            "description": "New notes for the event",
+            "type": "string"
+          },
+          "location": {
+            "description": "New location for the event",
+            "type": "string"
+          },
+          "url": {
+            "description": "New URL for the event (empty string to remove)",
+            "type": "string"
+          },
+          "isAllDay": {
+            "description": "Whether this is an all-day event",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_calendar_event",
+      "description": "Delete a calendar event by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the event to delete"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_reminder_lists",
+      "description": "List all reminder lists",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_reminder_list",
+      "description": "Create a new reminder list",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name for the new reminder list"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "rename_reminder_list",
+      "description": "Rename an existing reminder list",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The current name of the list to rename"
+          },
+          "newName": {
+            "type": "string",
+            "description": "The new name for the list"
+          }
+        },
+        "required": [
+          "name",
+          "newName"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_reminder_list",
+      "description": "Delete a reminder list",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the list to delete"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_reminders",
+      "description": "List reminders with optional filters (list, search, due date range, priority)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filterList": {
+            "description": "Filter reminders by list name",
+            "type": "string"
+          },
+          "showCompleted": {
+            "description": "Include completed reminders (default: false)",
+            "type": "boolean"
+          },
+          "search": {
+            "description": "Search term to filter reminders by title or notes",
+            "type": "string"
+          },
+          "dueWithin": {
+            "description": "Filter reminders by due date range",
+            "type": "string",
+            "enum": [
+              "today",
+              "tomorrow",
+              "this-week",
+              "overdue",
+              "no-date",
+              "scheduled"
+            ]
+          },
+          "priority": {
+            "description": "Filter reminders by priority level",
+            "type": "string",
+            "enum": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_reminder",
+      "description": "Get a single reminder by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the reminder"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_reminder",
+      "description": "Create a new reminder",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the reminder"
+          },
+          "targetList": {
+            "description": "The list to create the reminder in (defaults to default list)",
+            "type": "string"
+          },
+          "notes": {
+            "description": "Additional notes for the reminder",
+            "type": "string"
+          },
+          "url": {
+            "description": "A URL to associate with the reminder",
+            "type": "string",
+            "format": "uri"
+          },
+          "dueDate": {
+            "description": "Due date in local time by default (format: 'YYYY-MM-DD HH:mm:ss'). Only include a timezone offset if explicitly specified.",
+            "type": "string"
+          },
+          "recurrence": {
+            "description": "Recurrence rule for repeating reminders",
+            "type": "object",
+            "properties": {
+              "frequency": {
+                "type": "string",
+                "enum": [
+                  "daily",
+                  "weekly",
+                  "monthly",
+                  "yearly"
+                ],
+                "description": "Recurrence frequency"
+              },
+              "interval": {
+                "default": 1,
+                "description": "Interval between occurrences (e.g., 2 = every 2 weeks)",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "daysOfTheWeek": {
+                "description": "Days of week (weekly/monthly/yearly)",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "dayOfWeek": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 7,
+                      "description": "Day of week: 1=Sunday, 2=Monday, ..., 7=Saturday"
+                    },
+                    "weekNumber": {
+                      "description": "For monthly/yearly: 1-5 or -1 (last)",
+                      "type": "integer",
+                      "minimum": -1,
+                      "maximum": 5
+                    }
+                  },
+                  "required": [
+                    "dayOfWeek"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "daysOfTheMonth": {
+                "description": "Days of month (monthly only, 1-31, negative from end)",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": -31,
+                  "maximum": 31
+                }
+              },
+              "monthsOfTheYear": {
+                "description": "Months of year (yearly only, 1-12)",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 12
+                }
+              },
+              "weeksOfTheYear": {
+                "description": "Weeks of year (yearly only, 1-53, negative from end)",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": -53,
+                  "maximum": 53
+                }
+              },
+              "daysOfTheYear": {
+                "description": "Days of year (yearly only, 1-366, negative from end)",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": -366,
+                  "maximum": 366
+                }
+              },
+              "setPositions": {
+                "description": "Filter occurrences (e.g., [1, -1] = first and last)",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": -366,
+                  "maximum": 366
+                }
+              },
+              "end": {
+                "description": "End condition",
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "never",
+                      "date",
+                      "count"
+                    ],
+                    "description": "End condition type"
+                  },
+                  "date": {
+                    "description": "ISO 8601 date when type=\"date\"",
+                    "type": "string"
+                  },
+                  "count": {
+                    "description": "Number of occurrences when type=\"count\"",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "frequency"
+            ],
+            "additionalProperties": false
+          },
+          "priority": {
+            "description": "Priority level (none, low, medium, high)",
+            "type": "string",
+            "enum": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_reminder",
+      "description": "Update an existing reminder",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the reminder to update"
+          },
+          "title": {
+            "description": "New title for the reminder",
+            "type": "string"
+          },
+          "targetList": {
+            "description": "Move reminder to a different list",
+            "type": "string"
+          },
+          "notes": {
+            "description": "New notes for the reminder",
+            "type": "string"
+          },
+          "url": {
+            "description": "New URL for the reminder (empty string to remove)",
+            "type": "string"
+          },
+          "dueDate": {
+            "description": "New due date in local time by default (format: 'YYYY-MM-DD HH:mm:ss', empty string to remove). Only include a timezone offset if explicitly specified.",
+            "type": "string"
+          },
+          "completed": {
+            "description": "Mark the reminder as completed or not",
+            "type": "boolean"
+          },
+          "recurrence": {
+            "description": "Recurrence rule (null to remove, object to set/update)",
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "frequency": {
+                    "type": "string",
+                    "enum": [
+                      "daily",
+                      "weekly",
+                      "monthly",
+                      "yearly"
+                    ],
+                    "description": "Recurrence frequency"
+                  },
+                  "interval": {
+                    "default": 1,
+                    "description": "Interval between occurrences (e.g., 2 = every 2 weeks)",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "daysOfTheWeek": {
+                    "description": "Days of week (weekly/monthly/yearly)",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "dayOfWeek": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 7,
+                          "description": "Day of week: 1=Sunday, 2=Monday, ..., 7=Saturday"
+                        },
+                        "weekNumber": {
+                          "description": "For monthly/yearly: 1-5 or -1 (last)",
+                          "type": "integer",
+                          "minimum": -1,
+                          "maximum": 5
+                        }
+                      },
+                      "required": [
+                        "dayOfWeek"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "daysOfTheMonth": {
+                    "description": "Days of month (monthly only, 1-31, negative from end)",
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": -31,
+                      "maximum": 31
+                    }
+                  },
+                  "monthsOfTheYear": {
+                    "description": "Months of year (yearly only, 1-12)",
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 12
+                    }
+                  },
+                  "weeksOfTheYear": {
+                    "description": "Weeks of year (yearly only, 1-53, negative from end)",
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": -53,
+                      "maximum": 53
+                    }
+                  },
+                  "daysOfTheYear": {
+                    "description": "Days of year (yearly only, 1-366, negative from end)",
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": -366,
+                      "maximum": 366
+                    }
+                  },
+                  "setPositions": {
+                    "description": "Filter occurrences (e.g., [1, -1] = first and last)",
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": -366,
+                      "maximum": 366
+                    }
+                  },
+                  "end": {
+                    "description": "End condition",
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "never",
+                          "date",
+                          "count"
+                        ],
+                        "description": "End condition type"
+                      },
+                      "date": {
+                        "description": "ISO 8601 date when type=\"date\"",
+                        "type": "string"
+                      },
+                      "count": {
+                        "description": "Number of occurrences when type=\"count\"",
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "frequency"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priority": {
+            "description": "Priority level (none, low, medium, high)",
+            "type": "string",
+            "enum": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_reminder",
+      "description": "Delete a reminder by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the reminder to delete"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_note_folders",
+      "description": "List all folders in Apple Notes",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_note_folder",
+      "description": "Create a new folder in Apple Notes",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name for the new folder"
+          },
+          "parentFolder": {
+            "description": "Parent folder to create the new folder in (creates at root level if not specified)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_note_folder",
+      "description": "Delete a folder from Apple Notes",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the folder to delete"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_notes",
+      "description": "List notes in Apple Notes (optionally filtered by folder)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "folder": {
+            "description": "Filter notes by folder name",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of notes to return (default: 100)",
+            "type": "number"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_note",
+      "description": "Get the content of a note by title",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The exact title of the note"
+          },
+          "folder": {
+            "description": "The folder containing the note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_note",
+      "description": "Create a new note in Apple Notes (supports Markdown content)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the note"
+          },
+          "content": {
+            "type": "string",
+            "description": "The content of the note (supports Markdown)"
+          },
+          "folder": {
+            "description": "The folder to create the note in (defaults to \"Notes\")",
+            "type": "string"
+          },
+          "tags": {
+            "description": "Tags to add to the note",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "title",
+          "content"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_note",
+      "description": "Update an existing note in Apple Notes",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the note to update"
+          },
+          "newContent": {
+            "type": "string",
+            "description": "The new content for the note (supports Markdown)"
+          },
+          "newTitle": {
+            "description": "New title for the note (preserves existing title if not specified)",
+            "type": "string"
+          },
+          "folder": {
+            "description": "The folder containing the note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "newContent"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_note",
+      "description": "Delete a note from Apple Notes",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the note to delete"
+          },
+          "folder": {
+            "description": "The folder containing the note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "search_notes",
+      "description": "Search for notes by title",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query to find notes by title"
+          },
+          "folder": {
+            "description": "Folder to search in (searches all notes if not specified)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_message_chats",
+      "description": "List iMessage/SMS conversations with participants and last message. Note: Only locally-cached messages are available when Messages in iCloud is enabled.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "description": "Maximum number of chats to return (default: 50)",
+            "type": "number"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_message_chat",
+      "description": "Get details of a specific chat/conversation by ID, including participants",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the chat"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_messages",
+      "description": "List iMessage/SMS messages with optional filters (chat, contact name, date range, sender). Use \"contact\" to filter by name (automatically resolves to chat IDs). Returns most recent messages first.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "description": "Filter messages by chat ID",
+            "type": "string"
+          },
+          "contact": {
+            "description": "Filter by contact name, phone, or email (resolves to chat IDs automatically)",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of messages to return (default: 50)",
+            "type": "number"
+          },
+          "beforeDate": {
+            "description": "Filter messages before this date (ISO 8601)",
+            "type": "string"
+          },
+          "afterDate": {
+            "description": "Filter messages after this date (ISO 8601)",
+            "type": "string"
+          },
+          "fromMe": {
+            "description": "Filter to only messages sent by me (true) or received (false)",
+            "type": "boolean"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_message",
+      "description": "Get a single iMessage/SMS message by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the message"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "search_messages",
+      "description": "Search iMessage/SMS messages by text content. Use \"contact\" to filter by name (automatically resolves to chat IDs). Note: Only searches locally-cached messages.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search term to find in message text"
+          },
+          "chatId": {
+            "description": "Filter search to a specific chat",
+            "type": "string"
+          },
+          "contact": {
+            "description": "Filter by contact name, phone, or email (resolves to chat IDs automatically)",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of results (default: 50)",
+            "type": "number"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "send_message",
+      "description": "Send an iMessage or SMS. Accepts phone number, email, or the exact full name of a contact. Requires an existing conversation with the recipient. Requires Automation permission for Messages.app.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "description": "Phone number, email, or contact name. A name must be the exact full name of a single contact, or the send is refused."
+          },
+          "text": {
+            "type": "string",
+            "description": "The message text to send"
+          }
+        },
+        "required": [
+          "recipient",
+          "text"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_message_attachments",
+      "description": "List attachments from iMessage/SMS messages. Returns metadata including file paths - files must be read separately.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "description": "Filter attachments by chat ID",
+            "type": "string"
+          },
+          "messageId": {
+            "description": "Filter attachments by message ID",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of attachments to return (default: 50)",
+            "type": "number"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_message_attachment",
+      "description": "Get metadata for a specific message attachment by ID, including file path",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the attachment"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "search_contacts",
+      "description": "Search contacts by name, phone number, or email address. Returns matching contacts with full details. Requires Contacts permission.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Search contacts by name",
+            "type": "string"
+          },
+          "phone": {
+            "description": "Search contacts by phone number",
+            "type": "string"
+          },
+          "email": {
+            "description": "Search contacts by email address",
+            "type": "string"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_contact",
+      "description": "Get a single contact by ID with full details",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the contact"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_contacts",
+      "description": "List contacts, optionally filtered by group. Returns up to limit contacts (default: 200).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "description": "Filter contacts by group ID",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of contacts to return (default: 200)",
+            "type": "number"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "list_contact_groups",
+      "description": "List all contact groups",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "create_contact",
+      "description": "Create a new contact. At least one of givenName, familyName, or organizationName should be provided.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "givenName": {
+            "description": "First name",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Last name",
+            "type": "string"
+          },
+          "middleName": {
+            "description": "Middle name",
+            "type": "string"
+          },
+          "namePrefix": {
+            "description": "Name prefix (e.g. \"Dr.\", \"Mr.\")",
+            "type": "string"
+          },
+          "nameSuffix": {
+            "description": "Name suffix (e.g. \"Jr.\", \"III\")",
+            "type": "string"
+          },
+          "nickname": {
+            "description": "Nickname",
+            "type": "string"
+          },
+          "organizationName": {
+            "description": "Company or organization name",
+            "type": "string"
+          },
+          "jobTitle": {
+            "description": "Job title",
+            "type": "string"
+          },
+          "departmentName": {
+            "description": "Department name",
+            "type": "string"
+          },
+          "phoneNumbers": {
+            "description": "Phone numbers",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "description": "Label (e.g. \"mobile\", \"home\", \"work\")",
+                  "type": "string"
+                },
+                "number": {
+                  "type": "string",
+                  "description": "Phone number"
+                }
+              },
+              "required": [
+                "number"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "emailAddresses": {
+            "description": "Email addresses",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "description": "Label (e.g. \"home\", \"work\")",
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string",
+                  "description": "Email address"
+                }
+              },
+              "required": [
+                "email"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "postalAddresses": {
+            "description": "Postal addresses",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "description": "Label (e.g. \"home\", \"work\")",
+                  "type": "string"
+                },
+                "street": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "postalCode": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                },
+                "isoCountryCode": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "urlAddresses": {
+            "description": "URLs",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "description": "Label (e.g. \"homepage\", \"home\", \"work\")",
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "URL"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "birthday": {
+            "description": "Birthday (format: \"YYYY-MM-DD\" or \"--MM-DD\" for no year)",
+            "type": "string"
+          },
+          "note": {
+            "description": "Notes about the contact",
+            "type": "string"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "update_contact",
+      "description": "Update an existing contact. Array fields (phones, emails, addresses, URLs) replace all existing values when provided.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the contact to update"
+          },
+          "givenName": {
+            "description": "First name",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Last name",
+            "type": "string"
+          },
+          "middleName": {
+            "description": "Middle name",
+            "type": "string"
+          },
+          "namePrefix": {
+            "description": "Name prefix (e.g. \"Dr.\", \"Mr.\")",
+            "type": "string"
+          },
+          "nameSuffix": {
+            "description": "Name suffix (e.g. \"Jr.\", \"III\")",
+            "type": "string"
+          },
+          "nickname": {
+            "description": "Nickname",
+            "type": "string"
+          },
+          "organizationName": {
+            "description": "Company or organization name",
+            "type": "string"
+          },
+          "jobTitle": {
+            "description": "Job title",
+            "type": "string"
+          },
+          "departmentName": {
+            "description": "Department name",
+            "type": "string"
+          },
+          "phoneNumbers": {
+            "description": "Phone numbers (replaces all existing)",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "description": "Label (e.g. \"mobile\", \"home\", \"work\")",
+                  "type": "string"
+                },
+                "number": {
+                  "type": "string",
+                  "description": "Phone number"
+                }
+              },
+              "required": [
+                "number"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "emailAddresses": {
+            "description": "Email addresses (replaces all existing)",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "description": "Label (e.g. \"home\", \"work\")",
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string",
+                  "description": "Email address"
+                }
+              },
+              "required": [
+                "email"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "postalAddresses": {
+            "description": "Postal addresses (replaces all existing)",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "description": "Label (e.g. \"home\", \"work\")",
+                  "type": "string"
+                },
+                "street": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "postalCode": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                },
+                "isoCountryCode": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "urlAddresses": {
+            "description": "URLs (replaces all existing)",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "description": "Label (e.g. \"homepage\", \"home\", \"work\")",
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "URL"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "birthday": {
+            "description": "Birthday (format: \"YYYY-MM-DD\", \"--MM-DD\", or empty string to remove)",
+            "type": "string"
+          },
+          "note": {
+            "description": "Notes about the contact",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "delete_contact",
+      "description": "Delete a contact by ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the contact to delete"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ]
+}

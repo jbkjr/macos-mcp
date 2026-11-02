@@ -85,7 +85,7 @@ describe('send_message', () => {
 
     it('treats something that only contains @ as a name, not an address', async () => {
       vi.mocked(executeCli).mockResolvedValue({ contacts: [] });
-      expectRefused(await send('Jack @ Home'), 'No contact found');
+      expectRefused(await send('Someone @ Home'), 'No contact found');
       expect(executeCli).toHaveBeenCalled();
     });
 
