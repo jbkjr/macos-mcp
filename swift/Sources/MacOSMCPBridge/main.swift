@@ -1028,32 +1028,6 @@ extension EKEvent {
     }
 }
 
-// MARK: - Argument Parser
-struct ArgumentParser {
-    private let args: [String: String]
-
-    init() {
-        var dict = [String: String]()
-        var i = 0
-        let arguments = Array(CommandLine.arguments.dropFirst())
-        while i < arguments.count {
-            let key = arguments[i].replacingOccurrences(of: "--", with: "")
-            if i + 1 < arguments.count && !arguments[i + 1].hasPrefix("--") {
-                dict[key] = arguments[i + 1]
-                i += 2
-            } else {
-                dict[key] = "true"
-                i += 1
-            }
-        }
-        self.args = dict
-    }
-
-    func get(_ key: String) -> String? {
-        return args[key]
-    }
-}
-
 // MARK: - Permission Handling
 enum PermissionDomain: String {
     case calendars = "Calendars"
@@ -1126,7 +1100,6 @@ func main() {
         print(String(decoding: try! JSONEncoder().encode(StandardOutput(result: result)), as: UTF8.self))
         return
     }
-    let parser = ArgumentParser()
     let manager = EventKitManager()
     let encoder = JSONEncoder()
     encoder.outputFormatting = .prettyPrinted
@@ -1137,6 +1110,13 @@ func main() {
             print(json)
         }
         exit(1)
+    }
+
+    let parser: BridgeArguments
+    do {
+        parser = try BridgeArguments(arguments)
+    } catch {
+        outputError(error.localizedDescription)
     }
 
     func outputResult<T: Codable>(_ result: T) throws {
